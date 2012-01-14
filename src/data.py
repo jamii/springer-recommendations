@@ -1,53 +1,55 @@
 import datetime
-import math
+import json
 
 import util
 
 class Histogram():
-    def __init__(self, items, min_key, max_key):
-        # min_key and max_key are inclusive
-        self.min_key = min_key
-        self.max_key = max_key
+    def __init__(self, items, start_date, end_date):
+        # start_date and end_date are inclusive
+        self.start_date = start_date
+        self.end_date = end_date
         self.counts = {}
         for item in items:
             self.counts[item] = self.counts.get(item, 0) + 1
 
     def __str__(self):
-        return str(dict([(k, self[k]) for k in self]))
+        return repr(self)
 
     def __repr__(self):
-        return repr(dict([(k, self[k]) for k in self]))
+        items = [date for date, count in self.counts.items() for i in xrange(0, count)]
+        return "Histogram(%s, %s, %s)" % (repr(items), repr(self.start_date), repr(self.end_date))
 
     def __contains__(self, item):
-        if item in self.counts:
-            return True
-        elif self.min_key <= item <= self.max_key:
-            return True
-        else:
-            return False
+        return (self.start_date <= item <= self.end_date)
 
     def __getitem__(self, item):
         if item in self.counts:
             return self.counts[item]
-        elif self.min_key <= item <= self.max_key:
+        elif self.start_date <= item <= self.end_date:
             return 0
         else:
             raise KeyError(item)
 
     def __iter__(self):
-        if type(self.min_key) is int:
-            return iter(xrange(self.min_key, self.max_key+1))
-        elif type(self.min_key) is datetime.date:
-            return util.date_range(self.min_key, self.max_key)
+        return util.date_range(self.start_date, self.end_date)
 
-    def group_by(self, fun):
-        # require that fun is monotonic
-        self.min_key = fun(self.min_key)
-        self.max_key = fun(self.max_key)
+    def grouped_by(self, grouper):
+        # grouper must be monotonic and must return a date
         counts = {}
-        for key, count in self.counts.items():
-            counts[fun(key)] = counts.get(key, 0) + count
-        self.counts = counts
+        for date, count in self.counts.items():
+            counts[grouper(date)] = counts.get(date, 0) + count
+        histogram = Histogram([], self.start_date, self.end_date)
+        histogram.counts = counts
+        return histogram
+
+    def restricted_to(self, start_date, end_date):
+        histogram = Histogram([], max(start_date, self.start_date), min(end_date, self.end_date))
+        histogram.counts = dict(((date,value) for date,value in self.counts.items() if start_date <= date <= end_date))
+        return histogram
 
     def total(self):
         return sum(self.counts.values())
+
+    def dumps(self):
+        counts = sorted( [(str(date), value) for date, value in self.counts.items()] )
+        return json.dumps({'start_date': str(self.start_date), 'end_date': str(self.end_date), 'counts': counts})

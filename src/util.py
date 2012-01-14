@@ -2,9 +2,9 @@ import disco.core
 from disco.worker.classic.func import chain_reader
 from disco.util import kvgroup
 
-from socket import gethostname
-from gzip import GzipFile
+import gzip
 import os.path
+import sys
 import datetime
 import itertools
 import warnings
@@ -15,7 +15,7 @@ def default_partition(key, partitions, params):
     return hash(key) % partitions
 
 class Job(disco.core.Job):
-    required_modules = [('util', 'util.py'), ('db', 'db.py'), ('metadata', 'metadata.py'), ('jobs', 'jobs.py'), ('query', 'query.py'), ('data', 'data.py')]
+    required_modules = [('util', 'util.py'), ('jobs', 'jobs.py'), ('data', 'data.py')]
 
     map_reader = staticmethod(chain_reader)
 
@@ -23,7 +23,7 @@ class Job(disco.core.Job):
     partitions = 16
 
 def is_error(key):
-    with warnings.catch_warnings(): # UnicodeWarning
+    with warnings.catch_warnings(): # catch UnicodeWarning - it crashes the disco worker
         warnings.simplefilter("ignore")
         return key in [u'error', 'error']
 
@@ -42,10 +42,16 @@ def reduce_with_errors(reduce):
     return new_reduce
 
 def print_errors(job):
-    print job.__class__.__name__
+    sys.stdout.write("Finished job '%s'" % job.__class__.__name__)
+    has_errors = False
     for key, value in disco.core.result_iterator(job.wait()):
         if is_error(key):
-            print '\t', value
+            if not has_errors:
+                has_errors = True
+                sys.stdout.write(' with the following errors:\n')
+            print '    ', value
+    if not has_errors:
+        sys.stdout.write('\n')
 
 def encode(js):
     """Convert all unicode objects in a json structure to str<utf8> for disco interop"""
@@ -73,7 +79,7 @@ def flatten(listOfLists):
 
 def filter_logs(doi_file, log_file, out_file):
     dois = set(open(doi_file).read().split())
-    logs = open(log_file)
+    logs = gzip.open(log_file)
     out = open(out_file, 'w')
     pattern = re.compile('doi: "([^"]*)"')
     for log in logs:
