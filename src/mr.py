@@ -7,6 +7,7 @@ import itertools
 import warnings
 
 import disco.core
+import disco.util
 import disco.worker.classic.func
 
 def default_partition(key, partitions, params):
@@ -60,3 +61,22 @@ def write_results(job, root, formatter):
                 os.makedirs(directory)
             with open(filename, 'w') as file:
                 file.write(formatter(value))
+
+def group(iter, params):
+    return disco.util.kvgroup(iter)
+
+def group_uniq(iter, params):
+    for key, values in disco.util.kvgroup(iter):
+        yield key, list(set(values))
+
+# given urls for two sets of inputs, zip the urls for zip_reader
+def zip(input_a, input_b):
+    return '\n'.join([input_a, input_b])
+
+def zip_reader(stream, size, url):
+    [url_a, url_b] = url.split('\n')
+    reader_a = disco.worker.classic.func.chain_reader(input_a)
+    reader_b = disco.worker.classic.func.chain_reader(input_b)
+    for ((k_a, v_a), (k_b, v_b)) in itertools.izip(reader_a, reader_b):
+        assert (k_a == k_b)
+        yield (k_a, (v_a, v_b))

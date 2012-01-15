@@ -8,6 +8,8 @@ import mr
 download_pattern = re.compile("{ _id: ObjectId\('([^']*)'\), d: ([^,]*), doi: \"([^\"]*)\", i: \"([^\"]*)\", s: ([^,]*), ip: \"([^\"]*)\" }")
 
 class ParseDownloads(mr.Job):
+    # input from mongodb dump
+
     @staticmethod
     def map(line, params):
         match = downloads.download_pattern.match(line)

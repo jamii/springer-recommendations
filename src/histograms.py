@@ -61,6 +61,8 @@ class Histogram():
         return json.dumps({'start_date': str(self.start_date), 'end_date': str(self.end_date), 'counts': counts})
 
 class FindDataRange(mr.Job):
+    # input from ParseDownloads
+
     partitions = 1
 
     @staticmethod
@@ -80,7 +82,7 @@ class FindDataRange(mr.Job):
         yield 'max_date', max_date
 
 class BuildHistograms(mr.Job):
-    sort = True
+    # input from ParseDownloads
 
     @staticmethod
     @mr.map_with_errors
@@ -89,6 +91,7 @@ class BuildHistograms(mr.Job):
         date = download['date']
         yield doi, date
 
+    sort = True
     @staticmethod
     def reduce(iter, params):
         for doi, dates in disco.util.kvgroup(iter):
