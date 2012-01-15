@@ -1,7 +1,13 @@
+"""Histograms of downloads over time for a given DOI"""
+
 import datetime
 import json
+import os.path
 
-import util
+import disco.core
+import disco.util
+
+import mr
 
 class Histogram():
     def __init__(self, items, start_date, end_date):
@@ -53,3 +59,56 @@ class Histogram():
     def dumps(self):
         counts = sorted( [(str(date), value) for date, value in self.counts.items()] )
         return json.dumps({'start_date': str(self.start_date), 'end_date': str(self.end_date), 'counts': counts})
+
+class FindDataRange(mr.Job):
+    partitions = 1
+
+    @staticmethod
+    @mr.map_with_errors
+    def map((id, download), params):
+        yield download['date'], None
+
+    @staticmethod
+    def reduce(iter, params):
+        date, _ = iter.next()
+        min_date = date
+        max_date = date
+        for date, _ in iter:
+            min_date = min(min_date, date)
+            max_date = max(max_date, date)
+        yield 'min_date', min_date
+        yield 'max_date', max_date
+
+class BuildHistograms(mr.Job):
+    sort = True
+
+    @staticmethod
+    @mr.map_with_errors
+    def map((id, download), params):
+        doi = download['doi']
+        date = download['date']
+        yield doi, date
+
+    @staticmethod
+    def reduce(iter, params):
+        for doi, dates in disco.util.kvgroup(iter):
+            yield doi, Histogram(dates, params['min_date'], params['max_date'])
+
+def build(downloads, directory='./histograms'):
+    find_data_range = FindDataRange().run(input=[downloads.wait()])
+    mr.print_errors(find_data_range)
+    data_range = dict(disco.core.result_iterator(find_data_range.results()))
+    find_data_range.purge()
+
+    histograms = BuildHistograms().run(input=[downloads.wait()], params=data_range)
+    mr.print_errors(histograms)
+
+    def year_month(date):
+        return datetime.date(date.year, date.month, 1)
+    mr.write_results(histograms, os.path.join(directory, 'monthly'), lambda histogram: histogram.grouped_by(year_month).dumps())
+
+    today = datetime.date.today()
+    thirty_days_ago = today - datetime.timedelta(days=30)
+    mr.write_results(histograms, os.path.join(directory, 'daily'), lambda histogram: histogram.restricted_to(thirty_days_ago, today).dumps())
+
+    histograms.purge()

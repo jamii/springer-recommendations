@@ -1,57 +1,7 @@
-import disco.core
-from disco.worker.classic.func import chain_reader
-from disco.util import kvgroup
-
 import gzip
-import os.path
-import sys
 import datetime
-import itertools
-import warnings
 import re
-import json
-
-def default_partition(key, partitions, params):
-    return hash(key) % partitions
-
-class Job(disco.core.Job):
-    required_modules = [('util', 'util.py'), ('jobs', 'jobs.py'), ('data', 'data.py')]
-
-    map_reader = staticmethod(chain_reader)
-
-    partition = staticmethod(default_partition)
-    partitions = 16
-
-def is_error(key):
-    with warnings.catch_warnings(): # catch UnicodeWarning - it crashes the disco worker
-        warnings.simplefilter("ignore")
-        return key in [u'error', 'error']
-
-def map_with_errors(map):
-    def new_map((key, value), params):
-        if not is_error(key):
-            return map((key, value), params)
-        else:
-            return iter([])
-    return new_map
-
-def reduce_with_errors(reduce):
-    def new_reduce(iter, params):
-        iter = itertools.ifilter(lambda (key, value): not is_error(key), iter)
-        return reduce(iter, params)
-    return new_reduce
-
-def print_errors(job):
-    sys.stdout.write("Finished job '%s'" % job.__class__.__name__)
-    has_errors = False
-    for key, value in disco.core.result_iterator(job.wait()):
-        if is_error(key):
-            if not has_errors:
-                has_errors = True
-                sys.stdout.write(' with the following errors:\n')
-            print '    ', value
-    if not has_errors:
-        sys.stdout.write('\n')
+import itertools
 
 def encode(js):
     """Convert all unicode objects in a json structure to str<utf8> for disco interop"""
