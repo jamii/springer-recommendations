@@ -98,20 +98,20 @@ class BuildHistograms(mr.Job):
             yield doi, Histogram(dates, params['min_date'], params['max_date'])
 
 def build(downloads, directory='./histograms'):
-    find_data_range = FindDataRange().run(input=[downloads.wait()])
+    find_data_range = FindDataRange().run(input=[downloads])
     mr.print_errors(find_data_range)
     data_range = dict(disco.core.result_iterator(find_data_range.results()))
     find_data_range.purge()
 
-    histograms = BuildHistograms().run(input=[downloads.wait()], params=data_range)
+    histograms = BuildHistograms().run(input=[downloads], params=data_range)
     mr.print_errors(histograms)
 
     def year_month(date):
         return datetime.date(date.year, date.month, 1)
-    mr.write_results(histograms, os.path.join(directory, 'monthly'), lambda histogram: histogram.grouped_by(year_month).dumps())
+    mr.write_results(histograms.wait(), os.path.join(directory, 'monthly'), lambda histogram: histogram.grouped_by(year_month).dumps())
 
     today = datetime.date.today()
     thirty_days_ago = today - datetime.timedelta(days=30)
-    mr.write_results(histograms, os.path.join(directory, 'daily'), lambda histogram: histogram.restricted_to(thirty_days_ago, today).dumps())
+    mr.write_results(histograms.wait(), os.path.join(directory, 'daily'), lambda histogram: histogram.restricted_to(thirty_days_ago, today).dumps())
 
     histograms.purge()
