@@ -14,7 +14,7 @@ def default_partition(key, partitions, params):
     return hash(key) % partitions
 
 class Job(disco.core.Job):
-    required_modules = [(name, name+'.py') for name in ['util', 'mr', 'db', 'downloads', 'histograms', 'recommendations']]
+    required_modules = [(name, name+'.py') for name in ['util', 'cache', 'mr', 'db', 'downloads', 'histograms', 'recommendations']]
 
     map_reader = staticmethod(disco.worker.classic.func.chain_reader)
 

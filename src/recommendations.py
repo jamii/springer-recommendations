@@ -45,27 +45,26 @@ class Scores(mr.Job):
 
     @staticmethod
     def map_init(iter, params):
-        params['ip2dois'] = db.open('recommendations', 'ip2dois')
-        params['doi2ips'] = db.open('recommendations', 'doi2ips')
+        params['ip2dois'] = db.DB('recommendations', 'ip2dois')
+        params['doi2ips'] = db.DB('recommendations', 'doi2ips')
 
     @staticmethod
     def map((doi_a, ips_a), params):
-        ip2dois = params['ip2dois']
-        doi2ips = params['doi2ips']
-        doi2ips_common = {}
-        doi2ips_b = {}
+        ip2dois = params['ip2dois'].get_multi(ips_a)
+        dois = list(set((doi for dois in ip2dois.values() for doi in dois)))
+        doi2ips = params['doi2ips'].get_multi(dois)
 
+        doi2ips_common = {}
         for ip in ips_a:
-            dois = db.get(ip2dois, ip)
-            for doi in dois:
+            for doi in ip2dois[ip]:
                 doi2ips_common[doi] = doi2ips_common.get(doi, 0) + 1
-                if doi not in doi2ips_b:
-                    doi2ips_b[doi] = len(db.get(doi2ips, doi))
+
         scores = []
-        for doi_b, ips_b in doi2ips_b.items():
-            score = float(doi2ips_common[doi_b]) / doi2ips_b[doi_b] / len(ips_a)
+        for doi_b, ips_b in doi2ips.items():
+            score = float(doi2ips_common[doi_b]) / len(doi2ips[doi_b]) / len(ips_a)
             scores.append((score, doi_b))
         scores.sort(reverse=True)
+
         yield doi_a, scores[:params['limit']]
 
 def build(downloads, directory='./recommendations', limit=5):
