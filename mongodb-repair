@@ -1,0 +1,3 @@
+#!/bin/bash
+rm /var/lib/mongodb/mongod.lock
+ sudo -u mongodb mongod -f /etc/mongodb.conf --repair
