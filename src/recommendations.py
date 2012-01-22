@@ -63,8 +63,9 @@ class Scores(mr.Job):
 
         scores = []
         for doi_b, ips_b in doi2ips.items():
-            score = float(doi2ips_common[doi_b]) / len(doi2ips[doi_b]) / len(ips_a)
-            scores.append((score, doi_b))
+            if doi_b != doi_a:
+                score = (doi2ips_common[doi_b] ** 2.0) / len(doi2ips[doi_b]) / len(ips_a)
+                scores.append((score, doi_b))
         scores.sort(reverse=True)
 
         yield doi_a, scores[:params['limit']]
