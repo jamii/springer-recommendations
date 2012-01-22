@@ -1,4 +1,4 @@
-"""Use mongodb as a simple key-value store, since its already present for logs"""
+"""Use mongodb as a simple key->set-of-values store"""
 
 import pymongo
 
@@ -12,8 +12,8 @@ class DBInsert(mr.Job):
 
     @staticmethod
     @mr.map_with_errors
-    def map((key, value), params):
-        params['collection'].save(key, value)
+    def map((key, values), params):
+        params['collection'].update(key, values)
         return () # have to return an iterable :(
 
 def insert(input, db_name, collection_name):
@@ -25,8 +25,8 @@ class DB():
     def __init__(self, db_name, collection_name):
         self.collection = pymongo.Connection()[db_name][collection_name]
 
-    def save(self, key, value):
-        self.collection.save({'_id':key, 'value':value})
+    def update(self, key, values):
+        self.collection.update({'_id':key}, {'$addToSet':{'values':{'$each':values}}}, upsert=True)
 
     @cache.lfu(maxsize=500)
     def get(self, key):
