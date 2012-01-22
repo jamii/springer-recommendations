@@ -10,16 +10,18 @@ import disco.core
 import disco.util
 import disco.worker.classic.func
 
+import settings
+
 def default_partition(key, partitions, params):
     return hash(key) % partitions
 
 class Job(disco.core.Job):
-    required_modules = [(name, name+'.py') for name in ['util', 'cache', 'mr', 'db', 'downloads', 'histograms', 'recommendations']]
+    required_modules = [(name, name+'.py') for name in ['settings', 'util', 'cache', 'mr', 'db', 'downloads', 'histograms', 'recommendations']]
 
     map_reader = staticmethod(disco.worker.classic.func.chain_reader)
 
     partition = staticmethod(default_partition)
-    partitions = 16
+    partitions = settings.default_number_of_partitions
 
 def is_error(key):
     with warnings.catch_warnings(): # catch UnicodeWarning - it crashes the disco worker
