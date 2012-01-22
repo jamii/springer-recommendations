@@ -97,7 +97,7 @@ class BuildHistograms(mr.Job):
         for doi, dates in disco.util.kvgroup(iter):
             yield doi, Histogram(dates, params['min_date'], params['max_date'])
 
-def build(downloads, directory='./histograms'):
+def build(downloads, directory='histograms'):
     find_data_range = FindDataRange().run(input=[downloads])
     mr.print_errors(find_data_range)
     data_range = dict(disco.core.result_iterator(find_data_range.results()))

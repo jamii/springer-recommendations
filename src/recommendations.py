@@ -69,7 +69,7 @@ class Scores(mr.Job):
 
         yield doi_a, scores[:params['limit']]
 
-def build(downloads, directory='./recommendations', limit=5):
+def build(downloads, directory='recommendations', limit=5):
     ip2dois = Ip2Dois().run(input=downloads)
     mr.print_errors(ip2dois)
     db.insert(ip2dois.wait(), 'recommendations', 'ip2dois')

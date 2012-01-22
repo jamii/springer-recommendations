@@ -57,7 +57,7 @@ def print_errors(job):
 def write_results(input, root, formatter):
     for key, value in disco.core.result_iterator(input):
         if not is_error(key):
-            filename = os.path.join(root, key)
+            filename = os.path.join(settings.root_directory, root, key)
             directory = os.path.dirname(filename)
             if not os.path.exists(directory):
                 os.makedirs(directory)
