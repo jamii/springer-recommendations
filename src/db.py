@@ -24,7 +24,7 @@ def insert(input, db_name, collection_name):
 class DB():
     def __init__(self, db_name, collection_name):
         self.collection = pymongo.Connection()[db_name][collection_name]
-        self.cache = cache.Random(max_size=10000)
+        self.cache = cache.Random(max_size=settings.db_cache_size)
 
     def update(self, key, values):
         self.collection.update({'_id':key}, {'$addToSet':{'values':{'$each':values}}}, upsert=True)
