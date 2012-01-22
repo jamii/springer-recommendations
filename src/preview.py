@@ -4,9 +4,9 @@ Quick tool to preview recommendations
 
 import httplib, urllib
 import json
-import os.path
 
 import util
+import mr
 
 keys = json.load(open('keys'))
 
@@ -41,7 +41,7 @@ def recommendations(doi):
     print title(doi)
     print link(doi)
     print
-    dois = json.load(open(os.path.join('recommendations', doi)))
+    dois = json.load(open(mr.result_filename('recommendations', doi)))
     print '-' * 40
     for (score, doi) in dois:
         print score
