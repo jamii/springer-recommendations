@@ -2,6 +2,7 @@
 
 import pymongo
 
+import settings
 import mr
 import cache
 
