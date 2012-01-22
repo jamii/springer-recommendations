@@ -24,23 +24,28 @@ def insert(input, db_name, collection_name):
 class DB():
     def __init__(self, db_name, collection_name):
         self.collection = pymongo.Connection()[db_name][collection_name]
+        self.cache = cache.Random(max_size=10000)
 
     def update(self, key, values):
         self.collection.update({'_id':key}, {'$addToSet':{'values':{'$each':values}}}, upsert=True)
 
-    @cache.lfu(maxsize=500)
     def get(self, key):
-        return self.collection.find_one({'_id':key})['value']
+        if key in self.cache:
+            return self.cache[key]
+        else:
+            values = self.collection.find_one({'_id':key})['values']
+            self.cache[key] = values
+            return values
 
     def get_multi(self, keys):
-        cached = dict(((key, self.get.cache[key]) for key in keys if key in self.get.cache))
+        cached = dict(((key, self.cache[key]) for key in keys if key in self.cache))
 
-        uncached_keys = [key for key in keys if key not in self.get.cache]
+        uncached_keys = [key for key in keys if key not in self.cache]
         db_results = self.collection.find({'_id':{'$in':uncached_keys}})
-        uncached = dict(((item['_id'], item['value']) for item in db_results))
+        uncached = dict(((item['_id'], item['values']) for item in db_results))
 
-        for key, value in uncached.items():
-            self.get.push(key, value)
+        for key, values in uncached.items():
+            self.cache[key] = values
 
         cached.update(uncached)
         return cached
