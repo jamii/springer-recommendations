@@ -2,14 +2,14 @@ import json
 
 import mr
 
-def cliqueness(dois):
+def cliqueness(build_name, dois):
     """Percentage of recommendations for this set which are not in this set"""
     dois = set(dois)
     inside = 0
     outside = 0
     for doi in dois:
         try:
-            recommendations = json.load(open(mr.result_filename('recommendations', doi)))
+            recommendations = json.load(open(mr.result_filename(build_name, 'recommendations', doi)))
             for (score, recommendation) in recommendations:
                 if recommendation in dois:
                     inside += 1

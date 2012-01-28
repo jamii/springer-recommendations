@@ -47,8 +47,8 @@ class Scores(mr.Job):
 
     @staticmethod
     def map_init(iter, params):
-        params['ip2dois'] = db.DB('recommendations', 'ip2dois')
-        params['doi2ips'] = db.DB('recommendations', 'doi2ips')
+        params['ip2dois'] = db.DB(params['db_name'], 'ip2dois')
+        params['doi2ips'] = db.DB(params['db_name'], 'doi2ips')
 
     @staticmethod
     def map((doi_a, ips_a), params):
@@ -70,21 +70,23 @@ class Scores(mr.Job):
 
         yield doi_a, scores[:params['limit']]
 
-def build(downloads, directory='recommendations', limit=5):
+def build(downloads, build_name='test', limit=5):
+    db_name = 'recommendations-' + build_name
+
     ip2dois = Ip2Dois().run(input=downloads)
     mr.print_errors(ip2dois)
-    db.insert(ip2dois.wait(), 'recommendations', 'ip2dois')
+    db.insert(ip2dois.wait(), db_name, 'ip2dois')
     ip2dois.purge()
 
     doi2ips = Doi2Ips().run(input=downloads)
     mr.print_errors(doi2ips)
-    db.insert(doi2ips.wait(), 'recommendations', 'doi2ips')
+    db.insert(doi2ips.wait(), db_name, 'doi2ips')
 
-    scores = Scores().run(input=doi2ips.wait(), params={'limit':5})
+    scores = Scores().run(input=doi2ips.wait(), params={'limit':5, 'db_name':db_name})
     mr.print_errors(scores)
 
     doi2ips.purge()
 
-    mr.write_results(scores.wait(), directory, json.dumps)
+    mr.write_results(scores.wait(), build_name, 'recommendations', json.dumps)
 
     scores.purge()

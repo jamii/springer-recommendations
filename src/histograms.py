@@ -97,7 +97,7 @@ class BuildHistograms(mr.Job):
         for doi, dates in disco.util.kvgroup(iter):
             yield doi, Histogram(dates, params['min_date'], params['max_date'])
 
-def build(downloads, directory='histograms'):
+def build(downloads, build_name='test'):
     find_data_range = FindDataRange().run(input=[downloads])
     mr.print_errors(find_data_range)
     data_range = dict(disco.core.result_iterator(find_data_range.results()))
@@ -108,10 +108,10 @@ def build(downloads, directory='histograms'):
 
     def year_month(date):
         return datetime.date(date.year, date.month, 1)
-    mr.write_results(histograms.wait(), os.path.join(directory, 'monthly'), lambda histogram: histogram.grouped_by(year_month).dumps())
+    mr.write_results(histograms.wait(), build_name, 'histograms/monthly', lambda histogram: histogram.grouped_by(year_month).dumps())
 
     today = datetime.date.today()
     thirty_days_ago = today - datetime.timedelta(days=30)
-    mr.write_results(histograms.wait(), os.path.join(directory, 'daily'), lambda histogram: histogram.restricted_to(thirty_days_ago, today).dumps())
+    mr.write_results(histograms.wait(), build_name, 'histograms/daily', lambda histogram: histogram.restricted_to(thirty_days_ago, today).dumps())
 
     histograms.purge()

@@ -54,13 +54,13 @@ def print_errors(job):
     if not has_errors:
         sys.stdout.write('\n')
 
-def result_filename(root, key):
-    return os.path.join(settings.root_directory, root, key)
+def result_filename(build_name, result_name, key):
+    return os.path.join(settings.root_directory, build_name, result_name, key)
 
-def write_results(input, root, formatter):
+def write_results(input, build_name, result_name, formatter):
     for key, value in disco.core.result_iterator(input):
         if not is_error(key):
-            filename = result_filename(root, key)
+            filename = result_filename(build_name, result_name, key)
             directory = os.path.dirname(filename)
             if not os.path.exists(directory):
                 os.makedirs(directory)
