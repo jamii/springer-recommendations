@@ -27,7 +27,7 @@ class Random():
         if key in self.cache:
             self.cache[key] = value
         else:
-            if self.total >= max_size:
+            if self.total >= self.max_size:
                 index = self.evict()
             else:
                 index = self.total
