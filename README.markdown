@@ -4,7 +4,7 @@ Install dependencies
 
      sudo apt-get install build-essential erlang erlang-dev python python-dev ipython python-pymongo nginx git-core
 
-Raise limit on number of file descriptors (nder large workloads disco runs out)
+Raise limit on number of file descriptors (under large workloads disco runs out)
 
     sudo bash -c "echo 'fs.file-max = 1000000' >> /etc/sysctl.conf"
     sysctl -p
