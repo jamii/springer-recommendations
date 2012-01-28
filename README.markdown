@@ -44,10 +44,10 @@ Setup disco
  Setup mongodb
 
     sudo cp mongodb.conf /etc/mongodb.conf
-    sudo mkdir -p /mnt/var/mongodb
-    sudo chown mongodb:mongodb /mnt/var/mongodb
+    sudo mkdir -p /mnt/var/lib/mongodb
+    sudo chown mongodb:mongodb /mnt/var/lib/mongodb
     sudo mkdir -p /mnt/var/log/mongodb/
-    sudo chown mongodb:mongodb /mnt/var/mongodb
+    sudo chown mongodb:mongodb /mnt/var/log/mongodb
     sudo service mongodb restart
 
 (nginx setup will be here)
