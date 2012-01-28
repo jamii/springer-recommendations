@@ -59,15 +59,15 @@ The recommender uses dumps of the mongodb log database, stored in the disco dist
 
 To add a log file to ddfs:
 
-    sudo ddfs chunk dump:downloads ./log_file
+    sudo ddfs chunk live:downloads ./log_file
 
 To remove all log files from ddfs:
 
-   sudo ddfs rm dump:downloads
+   sudo ddfs rm live:downloads
 
 To build the download histograms and recommendations:
 
    cd springer-recommendations/src
-   nohup python -c 'import main; main.build_all(dump="dump:downloads")'
+   nohup python -c 'import main; main.build_all(dump="live:downloads")'
 
 You can watch the progress in the disco web config.
