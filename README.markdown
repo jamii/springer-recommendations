@@ -2,7 +2,7 @@
 
 Install dependencies
 
-     sudo apt-get install build-essential erlang erlang-dev python python-dev ipython python-pymongo nginx git-core
+     sudo apt-get install build-essential erlang erlang-dev python python-dev ipython python-pymongo nginx git-core mongodb
 
 Raise limit on number of file descriptors (under large workloads disco runs out)
 
@@ -43,7 +43,7 @@ Setup disco
 
  Setup mongodb
 
-    sudo cp mongodb.conf /etc/mongodb.conf
+    sudo cp springer-recommendations/mongodb.conf /etc/mongodb.conf
     sudo mkdir -p /mnt/var/lib/mongodb
     sudo chown mongodb:mongodb /mnt/var/lib/mongodb
     sudo mkdir -p /mnt/var/log/mongodb/
@@ -63,13 +63,13 @@ To add a log file to ddfs under the tag 'live:downloads':
 
 To remove all log files under the tag 'live:downloads':
 
-   sudo ddfs rm live:downloads
+    sudo ddfs rm live:downloads
 
 To build the download histograms and recommendations using all files under the tag 'live:downloads':
 
-   cd springer-recommendations/src
-   nohup python -c 'import main; main.build_all(input=["live:downloads"], build_name="live")'
-   # nginx link will be here
+    cd springer-recommendations/src
+    nohup python -c 'import main; main.build_all(input=["live:downloads"], build_name="live")'
+    # nginx link will be here
 
 You can watch the progress in the disco web config.
 
@@ -87,7 +87,7 @@ Regression tests are used to catch changes in output between different versions 
     python -c 'import main; main.build_all(input=["test:downloads"], build_name="regression-branch")'
     python -c 'import test; test.regression("regression-master", "regression-branch")
 
-The regression test walks both the directory trees for each build in parallel at stop at the first difference encountered eg:
+The regression test walks the directory trees for each build in parallel and stops at the first difference encountered eg:
 
     Filenames do not match:
     /mnt/var/springer-recommendations/test1/histograms/daily/10.1007/BF00379779
