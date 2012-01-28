@@ -54,6 +54,9 @@ def print_errors(job):
     if not has_errors:
         sys.stdout.write('\n')
 
+def result_directory(build_name):
+    return os.path.join(settings.root_directory, build_name)
+
 def result_filename(build_name, result_name, key):
     return os.path.join(settings.root_directory, build_name, result_name, key)
 
