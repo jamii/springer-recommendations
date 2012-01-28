@@ -68,6 +68,6 @@ To remove all log files from ddfs:
 To build the download histograms and recommendations:
 
    cd springer-recommendations/src
-   nohup python -c 'import main; main.build_all(dump="live:downloads")'
+   nohup python -c 'import main; main.build_all(input=["live:downloads"])'
 
 You can watch the progress in the disco web config.

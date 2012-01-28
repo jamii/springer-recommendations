@@ -25,7 +25,7 @@ class ParseDownloads(mr.Job):
         else:
             yield 'error', line
 
-def parse(dump='dump:downloads'):
-    downloads = ParseDownloads().run(input=[dump])
+def parse(input=['test:downloads']):
+    downloads = ParseDownloads().run(input=input)
     mr.print_errors(downloads)
     return downloads
