@@ -43,12 +43,13 @@ Setup disco
 
  Setup mongodb
 
+    sudo service mongodb stop
     sudo cp springer-recommendations/mongodb.conf /etc/mongodb.conf
     sudo mkdir -p /mnt/var/lib/mongodb
     sudo chown mongodb:mongodb /mnt/var/lib/mongodb
     sudo mkdir -p /mnt/var/log/mongodb/
     sudo chown mongodb:mongodb /mnt/var/log/mongodb
-    sudo service mongodb restart
+    sudo service mongodb start
 
 (nginx setup will be here)
 (cron setup will be here)
