@@ -51,7 +51,14 @@ Setup disco
     sudo chown mongodb:mongodb /mnt/var/log/mongodb
     sudo service mongodb start
 
-(nginx setup will be here)
+Setup nginx
+
+    sudo mkdir /usr/local/nginx # for some reason the ubuntu package does not create this
+    sudo cp nginx.conf /etc/nginx/sites-available/springer-recommendations.conf
+    sudo ln -s /etc/nginx/sites-available/springer-recommendations.conf /etc/nginx/sites-enabled/springer-recommendations.conf
+    sudo rm /etc/nginx/sites-enabled/default
+    sudo service nginx restart
+
 (cron setup will be here)
 
 # Operation
@@ -103,3 +110,16 @@ The regression test walks the directory trees for each build in parallel and sto
       File "test.py", line 42, in regression
         raise RegressionError()
     test.RegressionError
+
+# API
+
+All results are written to the file-system under their build name and served by nginx. For example, if you wanted results from the 'live' build:
+
+    ubuntu@domU-12-31-39-16-CC-12:~$ curl localhost:80/springer-recommendations/live/histograms/monthly/10.1007/s10853-009-4131-2
+    {"counts": [["2011-01-01", 1], ["2011-02-01", 1], ["2011-03-01", 1], ["2011-04-01", 2], ["2011-05-01", 3]], "start_date": "2011-01-07", "end_date": "2011-05-19"}
+
+    ubuntu@domU-12-31-39-16-CC-12:~$ curl localhost:80/springer-recommendations/live/histograms/daily/10.1007/s10853-009-4131-2
+    {"counts": [], "start_date": "2011-12-30", "end_date": "2011-05-19"}
+
+    ubuntu@domU-12-31-39-16-CC-12:~$ curl localhost:80/springer-recommendations/live/recommendations/10.1007/s10853-009-4131-2
+    [[0.1258741258741259, "10.1007/s10853-010-4213-1"], [0.11538461538461539, "10.1023/B:JMSC.0000048768.52085.63"], [0.11538461538461539, "10.1023/B:JMSC.0000048767.92292.df"], [0.11538461538461539, "10.1023/B:JMSC.0000047544.44078.ca"], [0.11538461538461539, "10.1023/B:JMSC.0000045664.59279.e4"]]
