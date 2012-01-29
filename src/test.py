@@ -127,6 +127,7 @@ def unit_check_results(build_name, results):
         print 'Passed!'
 
 def unit_base(build_name='unit-base'):
+    mr.drop_results(build_name)
     db.drop(recommendations.db_name(build_name))
     main.build_all(input=[unit_input(build_name, unit_data)], build_name=build_name)
     unit_check_results(build_name, unit_results)
@@ -134,6 +135,8 @@ def unit_base(build_name='unit-base'):
 def unit_merge(build_name='unit-merge'):
     half_a = dict([(doi, ips[0::2]) for doi, ips in unit_data[0::2]] + [(doi, ips[1::2]) for doi, ips in unit_data[1::2]])
     half_b = dict([(doi, ips[1::2]) for doi, ips in unit_data[0::2]] + [(doi, ips[0::2]) for doi, ips in unit_data[1::2]])
+
+    mr.drop_results(build_name)
     db.drop(recommendations.db_name(build_name))
     main.build_all(input=[unit_input(build_name, half_a)], build_name=build_name)
     main.build_all(input=[unit_input(build_name, half_b)], build_name=build_name)

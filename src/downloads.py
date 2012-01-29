@@ -23,7 +23,7 @@ class ParseDownloads(mr.Job):
                 }
             yield id, download
         else:
-            yield 'error', line
+            yield 'error', 'No match for log line: ' + line
 
 def parse(input=['test:downloads']):
     downloads = ParseDownloads().run(input=input)

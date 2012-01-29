@@ -6,6 +6,7 @@ import sys
 import itertools
 import warnings
 import json
+import shutil
 
 import disco.core
 import disco.util
@@ -73,6 +74,11 @@ def write_results(input, build_name, result_name, formatter=json.dumps):
 
 def get_result(build_name, result_name, key, formatter=json.loads):
     return formatter(open(result_filename(build_name, result_name, key)).read())
+
+def drop_results(build_name, result_name='', key=''):
+    path = os.path.join(settings.root_directory, build_name, result_name, key)
+    if os.path.exists(path):
+        shutil.rmtree(path)
 
 def group(iter, params):
     return disco.util.kvgroup(iter)
