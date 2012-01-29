@@ -24,7 +24,8 @@ class Ip2Dois(mr.Job):
     @staticmethod
     @mr.map_with_errors
     def map((id, download), params):
-        yield download['ip'], download['doi']
+        if download['ip'] and download['doi']:
+            yield download['ip'], download['doi']
 
     sort = True
     reduce = staticmethod(mr.group_uniq)
@@ -35,7 +36,8 @@ class Doi2Ips(mr.Job):
     @staticmethod
     @mr.map_with_errors
     def map((id, download), params):
-        yield download['doi'], download['ip']
+        if download['doi'] and download['ip']:
+            yield download['doi'], download['ip']
 
     sort = True
     reduce = staticmethod(mr.group_uniq)
