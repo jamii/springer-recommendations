@@ -93,15 +93,14 @@ def unit_input(build_name, data):
     log_format = '{ _id: ObjectId(\'foo\'), d: 20110101, doi: "%s", i: "0000-0000", s: 0, ip: "192.0.2.%s" }\n'
     logs = ((log_format % (doi, ip) for doi, ips in data.items() for ip in ips))
 
-    file = tempfile.NamedTemporaryFile(mode='w', delete=True)
-    file.writelines(logs)
+    _, name = tempfile.mkstemp()
+    with open(name, 'w') as file:
+        file.writelines(logs)
 
     tag = 'test:' + build_name
     ddfs = disco.ddfs.DDFS()
     ddfs.delete(tag)
-    ddfs.chunk(tag, ['file://' + file.name])
-
-    file.close() # file gets deleted
+    ddfs.chunk(tag, ['file://' + name])
 
     return tag
 
