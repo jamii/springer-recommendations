@@ -53,3 +53,7 @@ class DB():
 
         cached.update(uncached)
         return cached
+
+    def __iter__(self):
+        for item in self.collection.find():
+            yield item['_id'], item['values']
