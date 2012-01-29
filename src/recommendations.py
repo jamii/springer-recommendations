@@ -14,6 +14,7 @@ Unfortunately this does not scale so well when we have 5 million dois and 1 bill
 """
 
 import json
+import heapq
 
 import mr
 import db
@@ -68,9 +69,8 @@ class Scores(mr.Job):
             if doi_b != doi_a:
                 score = (doi2ips_common[doi_b] ** 2.0) / len(doi2ips[doi_b]) / len(ips_a)
                 scores.append((score, doi_b))
-        scores.sort(reverse=True)
 
-        yield doi_a, scores[:params['limit']]
+        yield doi_a, heapq.nlargest(params['limit'], scores)
 
 def build(downloads, build_name='test', limit=5):
     db_name = 'recommendations-' + build_name
