@@ -22,6 +22,9 @@ def insert(input, db_name, collection_name):
     job.wait()
     job.purge()
 
+def drop(db_name):
+    pymongo.Connection().drop_database(db_name)
+
 class DB():
     def __init__(self, db_name, collection_name):
         self.collection = pymongo.Connection()[db_name][collection_name]

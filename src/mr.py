@@ -5,6 +5,7 @@ import os.path
 import sys
 import itertools
 import warnings
+import json
 
 import disco.core
 import disco.util
@@ -60,7 +61,7 @@ def result_directory(build_name):
 def result_filename(build_name, result_name, key):
     return os.path.join(settings.root_directory, build_name, result_name, key)
 
-def write_results(input, build_name, result_name, formatter):
+def write_results(input, build_name, result_name, formatter=json.dumps):
     for key, value in disco.core.result_iterator(input):
         if not is_error(key):
             filename = result_filename(build_name, result_name, key)
@@ -69,6 +70,9 @@ def write_results(input, build_name, result_name, formatter):
                 os.makedirs(directory)
             with open(filename, 'w') as file:
                 file.write(formatter(value))
+
+def get_result(build_name, result_name, key, formatter=json.loads):
+    return formatter(open(result_filename(build_name, result_name, key)).read())
 
 def group(iter, params):
     return disco.util.kvgroup(iter)

@@ -41,7 +41,7 @@ def recommendations(build_name, doi):
     print title(doi)
     print link(doi)
     print
-    dois = json.load(open(mr.result_filename(build_name, 'recommendations', doi)))
+    dois = mr.get_result(build_name, 'recommendations', doi)
     print '-' * 40
     for (score, doi) in dois:
         print score

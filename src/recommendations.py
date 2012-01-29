@@ -72,19 +72,20 @@ class Scores(mr.Job):
 
         yield doi_a, heapq.nlargest(params['limit'], scores)
 
-def build(downloads, build_name='test', limit=5):
-    db_name = 'recommendations-' + build_name
+def db_name(build_name):
+    return 'recommendations-' + build_name
 
+def build(downloads, build_name='test', limit=5):
     ip2dois = Ip2Dois().run(input=downloads)
     mr.print_errors(ip2dois)
-    db.insert(ip2dois.wait(), db_name, 'ip2dois')
+    db.insert(ip2dois.wait(), db_name(build_name), 'ip2dois')
     ip2dois.purge()
 
     doi2ips = Doi2Ips().run(input=downloads)
     mr.print_errors(doi2ips)
-    db.insert(doi2ips.wait(), db_name, 'doi2ips')
+    db.insert(doi2ips.wait(), db_name(build_name), 'doi2ips')
 
-    scores = Scores().run(input=doi2ips.wait(), params={'limit':5, 'db_name':db_name})
+    scores = Scores().run(input=doi2ips.wait(), params={'limit':5, 'db_name':db_name(build_name)})
     mr.print_errors(scores)
 
     doi2ips.purge()
