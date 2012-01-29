@@ -78,6 +78,11 @@ Results are written to /mnt/var/springer-recommendations. The build name determi
 
 # Testing
 
+Unit tests compare results for a simple dataset to hand-solved results:
+
+    springer-recommendations/src
+    python -c 'import test; test.unit_base()'
+
 Regression tests are used to catch changes in output between different versions of the code or different system configurations eg
 
     sudo ddfs chunk test:downloads ./some_small_log_file
@@ -98,10 +103,3 @@ The regression test walks the directory trees for each build in parallel and sto
       File "test.py", line 42, in regression
         raise RegressionError()
     test.RegressionError
-
-Passing tests will look like this:
-
-    Regression test passed for builds:
-    regression-master
-    regression-branch
-    (1788 files compared)
