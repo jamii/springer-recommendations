@@ -20,7 +20,7 @@ import mr
 import db
 
 class Ip2Dois(mr.Job):
-    # input from ParseDownloads
+    # input from FetchDownloads
 
     @staticmethod
     @mr.map_with_errors

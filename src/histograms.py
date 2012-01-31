@@ -61,7 +61,7 @@ class Histogram():
         return json.dumps({'start_date': str(self.start_date), 'end_date': str(self.end_date), 'counts': counts})
 
 class FindDataRange(mr.Job):
-    # input from ParseDownloads
+    # input from FetchDownloads
 
     partitions = 1
 
