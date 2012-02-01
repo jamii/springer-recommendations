@@ -65,12 +65,15 @@ def result_filename(build_name, result_name, key):
 def write_results(input, build_name, result_name, formatter=json.dumps):
     for key, value in disco.core.result_iterator(input):
         if not is_error(key):
-            filename = result_filename(build_name, result_name, key)
-            directory = os.path.dirname(filename)
-            if not os.path.exists(directory):
-                os.makedirs(directory)
-            with open(filename, 'w') as file:
-                file.write(formatter(value))
+            try:
+                filename = result_filename(build_name, result_name, key)
+                directory = os.path.dirname(filename)
+                if not os.path.exists(directory):
+                    os.makedirs(directory)
+                with open(filename, 'w') as file:
+                    file.write(formatter(value))
+            except IOError, exception:
+                print "Error: %s" % str(exception)
 
 def get_result(build_name, result_name, key, formatter=json.loads):
     return formatter(open(result_filename(build_name, result_name, key)).read())
