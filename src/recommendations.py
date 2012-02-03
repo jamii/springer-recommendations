@@ -29,7 +29,6 @@ def score(total_a, common, total_b):
 class PartialScores(mr.Job):
     # input from FetchDownloads
 
-    status_interval = 100
     partitions = 64
 
     @staticmethod
@@ -41,26 +40,23 @@ class PartialScores(mr.Job):
 
     @staticmethod
     def reduce(iter, params):
-        total_counter = collections.Counter()
-        common_counter = collections.defaultdict(collections.Counter)
-        for ip, dois in disco.util.kvgroup(iter):
-            dois = list(dois) # dois is an exhaustible iter :(
-            for doi_a in dois:
-                total_counter[doi_a] += 1
-                for doi_b in dois:
-                    if doi_a != doi_b:
-                        common_counter[doi_a][doi_b] += 1
-                        common_counter[doi_b][doi_a] += 1
+        ip2dois = collections.defaultdict(set)
+        doi2ips = collections.defaultdict(set)
 
-        for doi_a, partial_total in total_counter.iteritems():
-            partial_common = common_counter[doi_a]
-            partial_totals = dict(((doi_b, total_counter[doi_b]) for doi_b in partial_common.iterkeys()))
-            yield doi_a, (partial_total, partial_common, partial_totals)
+        for ip, doi in iter:
+           ip2dois[ip].add(doi)
+           doi2ips[doi].add(ip)
+
+        for doi_a, ips in doi2ips.iteritems():
+            total = len(doi2ips[doi_a])
+            common_counter = collections.Counter((doi_b for ip in doi2ips[doi_a] for doi_b in ip2dois[ip]))
+            total_counter = dict((doi_b, len(doi2ips[doi_b])) for doi_b  in common_counter.iterkeys())
+            yield doi_a, (total, common_counter, total_counter)
 
 class MergeScores(mr.Job):
     # input from PartialScores
 
-    status_interval = 100
+    status_interval = 1000
     partitions = 64
 
     sort = True
