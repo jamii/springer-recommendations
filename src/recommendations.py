@@ -29,8 +29,6 @@ def score(total_a, common, total_b):
 class PartialScores(mr.Job):
     # input from FetchDownloads
 
-    partitions = 64
-
     @staticmethod
     def map((id, download), params):
         if download['ip'] and download['doi']:
@@ -63,9 +61,12 @@ class MergeScores(mr.Job):
     # input from PartialScores
 
     status_interval = 1000
-    partitions = 64
 
     sort = True
+
+    @staticmethod
+    def map((doi, counts), params):
+        yield doi, counts
 
     @staticmethod
     def reduce(iter, params):
