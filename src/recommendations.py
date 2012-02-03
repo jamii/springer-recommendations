@@ -49,6 +49,10 @@ class PartialScores(mr.Job):
             ip2dois[ip].add(doi)
             doi2ips[doi].add(ip)
 
+        for ip, dois in ip2dois.iteritems():
+            if len(dois) > 1000:
+                ip2dois[ip] = set()
+
         for doi_a, ips in doi2ips.iteritems():
             total = len(doi2ips[doi_a])
             common_counter = collections.Counter((doi_b for ip in doi2ips[doi_a] for doi_b in ip2dois[ip]))
