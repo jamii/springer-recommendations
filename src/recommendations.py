@@ -15,6 +15,7 @@ Unfortunately this does not scale so well when we have 5 million dois and 1 bill
 
 import json
 import heapq
+import collections
 
 import mr
 import db
@@ -54,13 +55,16 @@ class Scores(mr.Job):
     @staticmethod
     def map((doi_a, ips_a), params):
         ip2dois = params['ip2dois'].get_multi(ips_a)
-        dois = list(set((doi for dois in ip2dois.values() for doi in dois)))
+        for ip, dois in ip2dois.items():
+            if len(dois) >= 1000:
+                ip2dois[ip] = []
+        dois = list(set((doi for ip, dois in ip2dois.items() for doi in dois)))
         doi2ips = params['doi2ips'].get_multi(dois)
 
-        doi2ips_common = {}
+        doi2ips_common = collections.Counter()
         for ip in ips_a:
             for doi in ip2dois[ip]:
-                doi2ips_common[doi] = doi2ips_common.get(doi, 0) + 1
+                doi2ips_common[doi] += 1
 
         scores = []
         for doi_b, ips_b in doi2ips.items():
