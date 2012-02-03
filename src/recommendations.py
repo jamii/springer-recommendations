@@ -44,8 +44,10 @@ class PartialScores(mr.Job):
         doi2ips = collections.defaultdict(set)
 
         for ip, doi in iter:
-           ip2dois[ip].add(doi)
-           doi2ips[doi].add(ip)
+            doi = intern(doi)
+            ip = intern(ip)
+            ip2dois[ip].add(doi)
+            doi2ips[doi].add(ip)
 
         for doi_a, ips in doi2ips.iteritems():
             total = len(doi2ips[doi_a])
