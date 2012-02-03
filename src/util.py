@@ -36,3 +36,15 @@ def filter_logs(doi_file, log_file, out_file):
         match = pattern.search(log)
         if match and match.group(1) in dois:
             out.write(log)
+
+def upload_old_logs(log_file, db_name, collection_name):
+    import pymongo
+    collection = pymongo.Connection()[db_name][collection_name]
+    download_pattern = re.compile("{ _id: ObjectId\('([^']*)'\), d: ([^,]*), doi: \"([^\"]*)\", i: \"([^\"]*)\", s: ([^,]*), ip: \"([^\"]*)\" }")
+
+    for line in open(log_file):
+        match = download_pattern.match(line)
+        if match:
+            (id, date, doi, _, _, ip) = match.groups()
+            download = {'_id':id, 'doi':doi, 'd':int(date), 'ip':ip}
+            collection.insert(download)
