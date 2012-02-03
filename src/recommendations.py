@@ -23,7 +23,6 @@ class Ip2Dois(mr.Job):
     # input from FetchDownloads
 
     @staticmethod
-    @mr.map_with_errors
     def map((id, download), params):
         if download['ip'] and download['doi']:
             yield download['ip'], download['doi']
@@ -35,7 +34,6 @@ class Doi2Ips(mr.Job):
     # input from ParseDownloads
 
     @staticmethod
-    @mr.map_with_errors
     def map((id, download), params):
         if download['doi'] and download['ip']:
             yield download['doi'], download['ip']
@@ -77,12 +75,10 @@ def db_name(build_name):
 
 def build(downloads, build_name='test', limit=5):
     ip2dois = Ip2Dois().run(input=downloads)
-    mr.print_errors(ip2dois)
     db.insert(ip2dois.wait(), db_name(build_name), 'ip2dois')
     ip2dois.purge()
 
     doi2ips = Doi2Ips().run(input=downloads)
-    mr.print_errors(doi2ips)
     db.insert(doi2ips.wait(), db_name(build_name), 'doi2ips')
 
     scores = Scores().run(input=doi2ips.wait(), params={'limit':5, 'db_name':db_name(build_name)})
