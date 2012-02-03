@@ -13,83 +13,76 @@ def recommendations(doi_a, downloads, limit):
 Unfortunately this does not scale so well when we have 5 million dois and 1 billion downloads.
 """
 
-import json
+import collections
 import heapq
+import json
+
+import disco.util
 
 import mr
 import db
 
-class Ip2Dois(mr.Job):
+def score(total_a, common, total_b):
+    """Cosine distance"""
+    return (common ** 2) / total_a / total_b
+
+class PartialScores(mr.Job):
     # input from FetchDownloads
 
+    status_interval = 100
+    partitions = 64
+
     @staticmethod
-    @mr.map_with_errors
     def map((id, download), params):
         if download['ip'] and download['doi']:
             yield download['ip'], download['doi']
 
     sort = True
-    reduce = staticmethod(mr.group_uniq)
-
-class Doi2Ips(mr.Job):
-    # input from ParseDownloads
 
     @staticmethod
-    @mr.map_with_errors
-    def map((id, download), params):
-        if download['doi'] and download['ip']:
-            yield download['doi'], download['ip']
+    def reduce(iter, params):
+        total_counter = collections.Counter()
+        common_counter = collections.defaultdict(collections.Counter)
+        for ip, dois in disco.util.kvgroup(iter):
+            dois = list(dois) # dois is an exhaustible iter :(
+            for doi_a in dois:
+                total_counter[doi_a] += 1
+                for doi_b in dois:
+                    if doi_a != doi_b:
+                        common_counter[doi_a][doi_b] += 1
+                        common_counter[doi_b][doi_a] += 1
 
-    sort = True
-    reduce = staticmethod(mr.group_uniq)
+        for doi_a, partial_total in total_counter.iteritems():
+            partial_common = common_counter[doi_a]
+            partial_totals = dict(((doi_b, total_counter[doi_b]) for doi_b in partial_common.iterkeys()))
+            yield doi_a, (partial_total, partial_common, partial_totals)
 
-class Scores(mr.Job):
-    # input from Doi2Ips
+class MergeScores(mr.Job):
+    # input from PartialScores
 
     status_interval = 100
+    partitions = 64
+
+    sort = True
 
     @staticmethod
-    def map_init(iter, params):
-        params['ip2dois'] = db.DB(params['db_name'], 'ip2dois')
-        params['doi2ips'] = db.DB(params['db_name'], 'doi2ips')
-
-    @staticmethod
-    def map((doi_a, ips_a), params):
-        ip2dois = params['ip2dois'].get_multi(ips_a)
-        dois = list(set((doi for dois in ip2dois.values() for doi in dois)))
-        doi2ips = params['doi2ips'].get_multi(dois)
-
-        doi2ips_common = {}
-        for ip in ips_a:
-            for doi in ip2dois[ip]:
-                doi2ips_common[doi] = doi2ips_common.get(doi, 0) + 1
-
-        scores = []
-        for doi_b, ips_b in doi2ips.items():
-            if doi_b != doi_a:
-                score = (doi2ips_common[doi_b] ** 2.0) / len(doi2ips[doi_b]) / len(ips_a)
-                scores.append((score, doi_b))
-
-        yield doi_a, heapq.nlargest(params['limit'], scores)
-
-def db_name(build_name):
-    return 'recommendations-' + build_name
+    def reduce(iter, params):
+        for doi_a, counts in disco.util.kvgroup(iter):
+            total = 0
+            common = collections.Counter()
+            totals = collections.Counter()
+            for (partial_total, partial_common, partial_totals) in counts:
+                total += partial_total
+                common.update(partial_common)
+                totals.update(partial_totals)
+            scores = ((score(total, common[doi_b], totals[doi_b]), doi_b) for doi_b in common.iterkeys())
+            yield doi_a, heapq.nlargest(params['limit'], scores)
 
 def build(downloads, build_name='test', limit=5):
-    ip2dois = Ip2Dois().run(input=downloads)
-    mr.print_errors(ip2dois)
-    db.insert(ip2dois.wait(), db_name(build_name), 'ip2dois')
-    ip2dois.purge()
+    partial_scores = PartialScores().run(input=downloads)
+    merge_scores = MergeScores().run(input=partial_scores.wait(), params={'limit':5})
 
-    doi2ips = Doi2Ips().run(input=downloads)
-    mr.print_errors(doi2ips)
-    db.insert(doi2ips.wait(), db_name(build_name), 'doi2ips')
+    mr.write_results(merge_scores.wait(), build_name, 'recommendations', json.dumps)
 
-    scores = Scores().run(input=doi2ips.wait(), params={'limit':5, 'db_name':db_name(build_name)})
-    mr.print_errors(scores)
-
-    doi2ips.purge()
-
-    mr.write_results(scores.wait(), build_name, 'recommendations', json.dumps)
-
-    scores.purge()
+    partial_scores.purge()
+    merge_scores.purge()

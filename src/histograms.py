@@ -66,7 +66,6 @@ class FindDataRange(mr.Job):
     partitions = 1
 
     @staticmethod
-    @mr.map_with_errors
     def map((id, download), params):
         yield download['date'], None
 
@@ -82,10 +81,9 @@ class FindDataRange(mr.Job):
         yield 'max_date', max_date
 
 class BuildHistograms(mr.Job):
-    # input from ParseDownloads
+    # input from FetchDownloads
 
     @staticmethod
-    @mr.map_with_errors
     def map((id, download), params):
         doi = download['doi']
         date = download['date']
@@ -99,12 +97,10 @@ class BuildHistograms(mr.Job):
 
 def build(downloads, build_name='test'):
     find_data_range = FindDataRange().run(input=[downloads])
-    mr.print_errors(find_data_range)
-    data_range = dict(disco.core.result_iterator(find_data_range.results()))
+    data_range = dict(disco.core.result_iterator(find_data_range.wait()))
     find_data_range.purge()
 
     histograms = BuildHistograms().run(input=[downloads], params=data_range)
-    mr.print_errors(histograms)
 
     def year_month(date):
         return datetime.date(date.year, date.month, 1)
