@@ -45,8 +45,6 @@ class Doi2Ips(mr.Job):
 class Scores(mr.Job):
     # input from Doi2Ips
 
-    status_interval = 100
-
     @staticmethod
     def map_init(iter, params):
         params['ip2dois'] = db.DB(params['db_name'], 'ip2dois')
