@@ -60,8 +60,6 @@ class PartialScores(mr.Job):
 class MergeScores(mr.Job):
     # input from PartialScores
 
-    status_interval = 1000
-
     sort = True
 
     @staticmethod
