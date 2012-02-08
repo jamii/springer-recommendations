@@ -1,5 +1,6 @@
 """Use mongodb as a simple key->set-of-values store"""
 
+import collections
 import pymongo
 
 import settings
@@ -28,16 +29,18 @@ def drop(db_name):
 class DB():
     def __init__(self, db_name, collection_name):
         self.collection = pymongo.Connection()[db_name][collection_name]
+        self.collection.ensure_index([('k',1),('v',1)], drop_dups=True, unique=True)
         self.cache = cache.Random(max_size=settings.db_cache_size)
 
     def update(self, key, values):
-        self.collection.update({'_id':key}, {'$addToSet':{'values':{'$each':values}}}, upsert=True)
+        for value in values:
+            self.collection.insert({'k':key, 'v':value})
 
     def get(self, key):
         if key in self.cache:
             return self.cache[key]
         else:
-            values = self.collection.find_one({'_id':key})['values']
+            values = [item['v'] for item in self.collection.find({'k':key})]
             self.cache[key] = values
             return values
 
@@ -45,8 +48,9 @@ class DB():
         cached = dict(((key, self.cache[key]) for key in keys if key in self.cache))
 
         uncached_keys = [key for key in keys if key not in self.cache]
-        db_results = self.collection.find({'_id':{'$in':uncached_keys}})
-        uncached = dict(((item['_id'], item['values']) for item in db_results))
+        uncached = collections.defaultdict(list)
+        for item in self.collection.find({'k':{'$in':uncached_keys}}):
+            uncached[item['k']].append(item['v'])
 
         for key, values in uncached.items():
             self.cache[key] = values
@@ -56,4 +60,4 @@ class DB():
 
     def __iter__(self):
         for item in self.collection.find():
-            yield item['_id'], item['values']
+            yield item['k'], item['v']
