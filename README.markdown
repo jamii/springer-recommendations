@@ -2,7 +2,7 @@
 
 Install dependencies
 
-     sudo apt-get install build-essential erlang erlang-dev python python-dev ipython python-pymongo nginx git-core mongodb
+     sudo apt-get install build-essential erlang erlang-dev python python-dev ipython python-pymongo nginx git-core mongodb autoconf automake libtool pkg-config
 
 Raise limit on number of file descriptors (under large workloads disco runs out)
 
@@ -35,13 +35,21 @@ Setup disco
       # change number of workers to 2 * number of cores
     # click status and you should now see that the background of the hostname has changed from red to black
 
- Setup springer-recommendations
+Setup py-leveldb
+
+    svn checkout http://py-leveldb.googlecode.com/svn/trunk/ py-leveldb-read-only
+    cd py-leveldb-read-only
+    ./compile_leveldb.sh
+    python setup.py build
+    sudo python setup.py install
+
+Setup springer-recommendations
 
     git clone git://github.com/jamii/springer-recommendations.git
     sudo mkdir -p /mnt/var/springer-recommendations
     sudo chown $USER:$USER /mnt/var/springer-recommendations
 
- Setup mongodb
+Setup mongodb
 
     sudo service mongodb stop
     sudo cp springer-recommendations/mongodb.conf /etc/mongodb.conf
