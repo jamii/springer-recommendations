@@ -17,49 +17,56 @@ import json
 import heapq
 import collections
 
-import mr
+import disco.core
+
 import db
+import util
+import settings
 
-class Ip2Dois(mr.Job):
-    # input from FetchDownloads
+def from_disco(input):
+    for _, value in disco.core.result_iterator(input):
+        yield value
 
-    @staticmethod
-    def map((id, download), params):
-        if download['ip'] and download['doi']:
-            yield download['ip'], download['doi']
+def collate(downloads, build_name='test', incremental=False):
+    db_ip2dois = db.MultiValue(build_name, 'ip2dois', 'w')
+    db_doi2ips = db.MultiValue(build_name, 'doi2ips', 'w')
+    dois_modified = set()
 
-    sort = True
-    reduce = staticmethod(mr.group_uniq)
+    for download in util.notifying_iter(downloads, "recommendations.collate"):
+        ip = download['ip']
+        doi = download['doi']
+        db_ip2dois.put(ip, doi)
+        db_doi2ips.put(doi, ip)
+        if incremental:
+            dois_modified.add(doi)
 
-class Doi2Ips(mr.Job):
-    # input from ParseDownloads
+    db_ip2dois.sync()
+    db_doi2ips.sync()
 
-    partitions = 1
+    if incremental:
+        return dois_modified
+    else:
+        return None
 
-    @staticmethod
-    def map((id, download), params):
-        if download['doi'] and download['ip']:
-            yield download['doi'], download['ip']
+def scores(dois_modified=None, build_name='test', limit=5):
+    db_ip2dois = db.MultiValue(build_name, 'ip2dois', 'r')
+    db_doi2ips = db.MultiValue(build_name, 'doi2ips', 'r')
+    db_scores = db.SingleValue(build_name, 'scores', 'w')
 
-    sort = True
-    reduce = staticmethod(mr.group_uniq)
+    if dois_modified is None:
+        doi_iter = db_doi2ips
+    else:
+        doi_iter = ((doi, doi2ips.get(doi)) for doi in dois_modified)
 
-class Scores(mr.Job):
-    # input from Doi2Ips
+    for doi_a, ips_a in util.notifying_iter(doi_iter, "recommendations.scores"):
 
-    @staticmethod
-    def map_init(iter, params):
-        params['ip2dois'] = db.DB(params['db_name'], 'ip2dois')
-        params['doi2ips'] = db.DB(params['db_name'], 'doi2ips')
-
-    @staticmethod
-    def map((doi_a, ips_a), params):
-        ip2dois = params['ip2dois'].get_multi(ips_a)
+        ip2dois = dict(((ip, db_ip2dois.get(ip)) for ip in ips_a))
         for ip, dois in ip2dois.items():
-            if len(dois) >= 1000:
+            if len(dois) >= settings.max_downloads_per_ip: # drop the ~0.1% of ips that cause most of the work
                 ip2dois[ip] = []
-        dois = list(set((doi for ip, dois in ip2dois.items() for doi in dois)))
-        doi2ips = params['doi2ips'].get_multi(dois)
+
+        dois = set((doi for ip, dois in ip2dois.items() for doi in dois))
+        doi2ips = dict(((doi, db_doi2ips.get(doi)) for doi in dois))
 
         doi2ips_common = collections.Counter()
         for ip in ips_a:
@@ -72,46 +79,13 @@ class Scores(mr.Job):
                 score = (doi2ips_common[doi_b] ** 2.0) / len(doi2ips[doi_b]) / len(ips_a)
                 scores.append((score, doi_b))
 
-        yield doi_a, heapq.nlargest(params['limit'], scores)
+        scores = heapq.nlargest(limit, scores)
+        db_scores.put(doi_a, scores)
 
-def scores(build_name, limit=5):
-    db_doi2ips = db.DB(db_name(build_name), 'doi2ips')
-    db_ip2dois = db.DB(db_name(build_name), 'ip2dois')
-    for (doi_a, ips_a) in db_doi2ips:
-        ip2dois = db_ip2dois.get_multi(ips_a)
-        for ip, dois in ip2dois.items():
-            if len(dois) >= 1000:
-                ip2dois[ip] = []
-        dois = list(set((doi for ip, dois in ip2dois.items() for doi in dois)))
-        doi2ips = db_doi2ips.get_multi(dois)
+    db_scores.sync()
 
-        doi2ips_common = collections.Counter()
-        for ip in ips_a:
-            for doi in ip2dois[ip]:
-                doi2ips_common[doi] += 1
-
-        scores = []
-        for doi_b, ips_b in doi2ips.items():
-            if doi_b != doi_a:
-                score = (doi2ips_common[doi_b] ** 2.0) / len(doi2ips[doi_b]) / len(ips_a)
-                scores.append((score, doi_b))
-
-        yield doi_a, heapq.nlargest(limit, scores)
-
-
-def db_name(build_name):
-    return 'recommendations-' + build_name
-
-def build(downloads, build_name='test', limit=5):
-    ip2dois = Ip2Dois().run(input=downloads)
-    db.insert(ip2dois.wait(), db_name(build_name), 'ip2dois')
-    ip2dois.purge()
-
-    doi2ips = Doi2Ips().run(input=downloads)
-    db.insert(doi2ips.wait(), db_name(build_name), 'doi2ips')
-    doi2ips.purge()
-
-    recommendations = db.DB(db_name(build_name), 'recommendations')
-    for doi, recs in scores(build_name):
-        recommendations.insert(doi, recs)
-    recommendations.sync()
+def build(input, build_name='test', limit=5, incremental=False):
+    downloads = from_disco(input)
+    dois_modified = collate(downloads, build_name, incremental=incremental)
+    # note: if incremental == True then dois_modified == None
+    scores(dois_modified, build_name, limit)

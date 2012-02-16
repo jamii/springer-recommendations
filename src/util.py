@@ -48,3 +48,11 @@ def upload_old_logs(log_file, db_name, collection_name):
             (id, date, doi, _, _, ip) = match.groups()
             download = {'_id':id, 'doi':doi, 'd':int(date), 'ip':ip}
             collection.insert(download)
+
+def notifying_iter(iter, message, interval=10000):
+    i = 0
+    for value in iter:
+        i += 1
+        if i % interval == 0:
+            print message, i
+        yield value
