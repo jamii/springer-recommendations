@@ -49,10 +49,12 @@ def upload_old_logs(log_file, db_name, collection_name):
             download = {'_id':id, 'doi':doi, 'd':int(date), 'ip':ip}
             collection.insert(download)
 
-def notifying_iter(iter, message, interval=10000):
+def notifying_iter(iter, name, interval=10000):
     i = 0
+    print name, 'starting'
     for value in iter:
         i += 1
         if i % interval == 0:
-            print message, i
+            print name, i
         yield value
+    print name, 'finished'
