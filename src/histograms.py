@@ -64,7 +64,7 @@ def find_date_range(build_name='test'):
 
     min_date = datetime.date.max
     max_date = datetime.date.min
-    for _, download in util.notifying_iter(downloads, 'histograms.find_date_range', interval=10000):
+    for _, download in util.notifying_iter(downloads, 'histograms.find_date_range'):
         min_date = min(min_date, download['date'])
         max_date = max(max_date, download['date'])
 
@@ -74,7 +74,7 @@ def collate_dates(build_name='test'):
     downloads = db.SingleValue(build_name, 'downloads', 'r')
     dates = db.MultiValue(build_name, 'dates', 'w')
 
-    for id, download in util.notifying_iter(downloads, 'histograms.collate_dates', interval=10000):
+    for id, download in util.notifying_iter(downloads, 'histograms.collate_dates'):
         dates.put(download['doi'], id)
 
     dates.sync()
@@ -84,7 +84,7 @@ def build_histograms(min_date, max_date, build_name='test'):
     dates = db.MultiValue(build_name, 'dates', 'r')
     histograms = db.SingleValue(build_name, 'histograms', 'w')
 
-    for doi, ids in util.notifying_iter(dates, 'histograms.build_histograms'):
+    for doi, ids in util.notifying_iter(dates, 'histograms.build_histograms', interval=1000):
         histogram = Histogram((downloads.get(id)['date'] for id in ids), min_date, max_date)
         histograms.put(doi, histogram)
 
