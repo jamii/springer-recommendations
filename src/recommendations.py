@@ -69,3 +69,7 @@ def calculate_scores(limit=5, build_name='test'):
 def build(build_name='test', limit=5):
     collate_downloads(build_name)
     calculate_scores(limit, build_name)
+
+# for easy profiling
+if __name__ == '__main__':
+    calculate_scores(build_name='test')
