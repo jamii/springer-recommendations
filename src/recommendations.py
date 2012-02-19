@@ -27,11 +27,12 @@ def from_disco(input):
     for _, value in disco.core.result_iterator(input):
         yield value
 
-def collate_downloads(downloads, build_name='test'):
+def collate_downloads(build_name='test'):
+    downloads = db.SingleValue(build_name, 'downloads', 'r')
     ip2dois = db.MultiValue(build_name, 'ip2dois', 'w')
     doi2ips = db.MultiValue(build_name, 'doi2ips', 'w')
 
-    for download in util.notifying_iter(downloads, "recommendations.collate_downloads", interval=10000):
+    for _, download in util.notifying_iter(downloads, "recommendations.collate_downloads", interval=10000):
         ip = download['ip']
         doi = download['doi']
         ip2dois.put(ip, doi)
@@ -65,6 +66,6 @@ def calculate_scores(limit=5, build_name='test'):
 
     scores.sync()
 
-def build(downloads, build_name='test', limit=5):
-    collate_downloads(downloads, build_name)
+def build(build_name='test', limit=5):
+    collate_downloads(build_name)
     calculate_scores(limit, build_name)

@@ -6,6 +6,7 @@ import pymongo
 
 import mr
 import util
+import db
 
 import disco.schemes.scheme_raw
 
@@ -15,8 +16,10 @@ def date_to_int(date):
 def int_to_date(int):
     return datetime.date(int // 10000, int % 10000 // 100, int % 100)
 
-def fetch(db_name, collection_name, start_date=datetime.date.min):
+def fetch(db_name, collection_name, start_date=datetime.date.min, build_name='test'):
+    downloads = db.SingleValue(build_name, 'downloads', 'w')
     collection = pymongo.Connection()[db_name][collection_name]
+
     d = date_to_int(start_date)
     logs = collection.find({'d':{'$gte':d}})
     for log in util.notifying_iter(logs, "downloads.fetch", interval=10000):
@@ -24,4 +27,6 @@ def fetch(db_name, collection_name, start_date=datetime.date.min):
         doi = log['doi'].encode('utf8')
         date = int_to_date(int(log['d']))
         ip = log['ip'].encode('utf8')
-        yield {'id':id, 'doi':doi, 'date':date, 'ip':ip}
+        downloads.put(id,{'id':id, 'doi':doi, 'date':date, 'ip':ip})
+
+    downloads.sync()
