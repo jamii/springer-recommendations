@@ -31,7 +31,7 @@ def collate_downloads(downloads, build_name='test'):
     ip2dois = db.MultiValue(build_name, 'ip2dois', 'w')
     doi2ips = db.MultiValue(build_name, 'doi2ips', 'w')
 
-    for download in util.notifying_iter(downloads, "recommendations.collate_downloads:", interval=10000):
+    for download in util.notifying_iter(downloads, "recommendations.collate_downloads", interval=10000):
         ip = download['ip']
         doi = download['doi']
         ip2dois.put(ip, doi)
@@ -45,7 +45,7 @@ def calculate_scores(limit=5, build_name='test'):
     doi2ips = db.MultiValue(build_name, 'doi2ips', 'r')
     scores = db.SingleValue(build_name, 'scores', 'w')
 
-    for doi_a, ips_a in util.notifying_iter(doi2ips, "recommendations.calculate_scores:", interval=1000):
+    for doi_a, ips_a in util.notifying_iter(doi2ips, "recommendations.calculate_scores", interval=1000):
         doi2ips_common = collections.Counter()
 
         for ip in ips_a:

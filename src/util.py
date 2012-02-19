@@ -50,6 +50,7 @@ def upload_old_logs(log_file, db_name, collection_name):
             collection.insert(download)
 
 def notifying_iter(iter, name, interval=10000):
+    name = name + ":"
     i = 0
     print name, 'starting'
     for value in iter:
