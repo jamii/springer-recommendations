@@ -63,7 +63,7 @@ def pair(key, value):
 def unpair(string):
     key_len, = pair_struct.unpack(string[0:4])
     value_len, = pair_struct.unpack(string[4:8])
-    return string[2:2+key_len], string[2+key_len:2+key_len+value_len]
+    return string[8:8+key_len], string[8+key_len:8+key_len+value_len]
 
 def value(string):
     key_len = pair_struct.unpack(string[0:4])
