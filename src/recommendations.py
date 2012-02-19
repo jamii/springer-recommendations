@@ -22,9 +22,9 @@ import util
 import settings
 
 def collate_downloads(build_name='test'):
-    downloads = db.SingleValue(build_name, 'downloads', 'r')
-    ip2dois = db.MultiValue(build_name, 'ip2dois', 'w')
-    doi2ips = db.MultiValue(build_name, 'doi2ips', 'w')
+    downloads = db.SingleValue(build_name, 'downloads')
+    ip2dois = db.MultiValue(build_name, 'ip2dois')
+    doi2ips = db.MultiValue(build_name, 'doi2ips')
 
     for _, download in util.notifying_iter(downloads, "recommendations.collate_downloads", interval=10000):
         ip = download['ip']
@@ -32,13 +32,10 @@ def collate_downloads(build_name='test'):
         ip2dois.put(ip, doi)
         doi2ips.put(doi, ip)
 
-    ip2dois.sync()
-    doi2ips.sync()
-
 def calculate_scores(limit=5, build_name='test'):
-    ip2dois = db.MultiValue(build_name, 'ip2dois', 'r')
-    doi2ips = db.MultiValue(build_name, 'doi2ips', 'r')
-    scores = db.SingleValue(build_name, 'scores', 'w')
+    ip2dois = db.MultiValue(build_name, 'ip2dois')
+    doi2ips = db.MultiValue(build_name, 'doi2ips')
+    scores = db.SingleValue(build_name, 'scores')
 
     for doi_a, ips_a in util.notifying_iter(doi2ips, "recommendations.calculate_scores", interval=1000):
         doi2ips_common = collections.Counter()
@@ -57,8 +54,6 @@ def calculate_scores(limit=5, build_name='test'):
                     yield (score, doi_b)
 
         scores.put(doi_a, heapq.nlargest(limit, scores_a()))
-
-    scores.sync()
 
 def build(build_name='test', limit=5):
     collate_downloads(build_name)

@@ -60,7 +60,7 @@ class Histogram():
         return json.dumps({'start_date': str(self.start_date), 'end_date': str(self.end_date), 'counts': counts})
 
 def find_date_range(build_name='test'):
-    downloads = db.SingleValue(build_name, 'downloads', 'r')
+    downloads = db.SingleValue(build_name, 'downloads')
 
     min_date = datetime.date.max
     max_date = datetime.date.min
@@ -71,24 +71,20 @@ def find_date_range(build_name='test'):
     return (min_date, max_date)
 
 def collate_dates(build_name='test'):
-    downloads = db.SingleValue(build_name, 'downloads', 'r')
-    dates = db.MultiValue(build_name, 'dates', 'w')
+    downloads = db.SingleValue(build_name, 'downloads')
+    dates = db.MultiValue(build_name, 'dates')
 
     for id, download in util.notifying_iter(downloads, 'histograms.collate_dates'):
         dates.put(download['doi'], id)
 
-    dates.sync()
-
 def build_histograms(min_date, max_date, build_name='test'):
-    downloads = db.SingleValue(build_name, 'downloads', 'r')
-    dates = db.MultiValue(build_name, 'dates', 'r')
-    histograms = db.SingleValue(build_name, 'histograms', 'w')
+    downloads = db.SingleValue(build_name, 'downloads')
+    dates = db.MultiValue(build_name, 'dates')
+    histograms = db.SingleValue(build_name, 'histograms')
 
     for doi, ids in util.notifying_iter(dates, 'histograms.build_histograms', interval=1000):
         histogram = Histogram((downloads.get(id)['date'] for id in ids), min_date, max_date)
         histograms.put(doi, histogram)
-
-    histograms.sync()
 
 def build(build_name='test'):
     (min_date, max_date) = find_date_range(build_name)
