@@ -5,6 +5,7 @@ import cPickle as pickle
 import struct
 import os
 import os.path
+import itertools
 
 import disco.core
 
@@ -90,15 +91,5 @@ class MultiValue(Abstract):
 
     def __iter__(self):
         assert (self.mode == 'r')
-        current_key = None
-        current_values = []
-        for key, value in self.__kv_iter():
-            if key == current_key:
-                current_values.append(value)
-            else:
-                if current_key is not None:
-                    yield current_key, current_values
-                current_key = key
-                current_values = [value]
-        if current_key is not None:
-            yield current_key, current_values
+        for key, values in itertools.groupby(self.__kv_iter(), lambda (key, value): key):
+            yield key, (value for (key,value) in values)
