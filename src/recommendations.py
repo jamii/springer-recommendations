@@ -17,15 +17,9 @@ import json
 import heapq
 import collections
 
-import disco.core
-
 import db
 import util
 import settings
-
-def from_disco(input):
-    for _, value in disco.core.result_iterator(input):
-        yield value
 
 def collate_downloads(build_name='test'):
     downloads = db.SingleValue(build_name, 'downloads', 'r')

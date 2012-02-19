@@ -3,11 +3,10 @@
 import datetime
 import json
 import os.path
+import itertools
 
-import disco.core
-import disco.util
-
-import mr
+import db
+import util
 
 class Histogram():
     def __init__(self, items, start_date, end_date):
@@ -60,54 +59,38 @@ class Histogram():
         counts = sorted( [(str(date), value) for date, value in self.counts.items()] )
         return json.dumps({'start_date': str(self.start_date), 'end_date': str(self.end_date), 'counts': counts})
 
-class FindDataRange(mr.Job):
-    # input from FetchDownloads
+def find_date_range(build_name='test'):
+    downloads = db.SingleValue(build_name, 'downloads', 'r')
 
-    partitions = 1
+    min_date = datetime.date.max
+    max_date = datetime.date.min
+    for _, download in util.notifying_iter(downloads, 'histograms.find_date_range', interval=10000):
+        min_date = min(min_date, download['date'])
+        max_date = max(max_date, download['date'])
 
-    @staticmethod
-    def map((id, download), params):
-        yield download['date'], None
+    return (min_date, max_date)
 
-    @staticmethod
-    def reduce(iter, params):
-        date, _ = iter.next()
-        min_date = date
-        max_date = date
-        for date, _ in iter:
-            min_date = min(min_date, date)
-            max_date = max(max_date, date)
-        yield 'min_date', min_date
-        yield 'max_date', max_date
+def collate_dates(build_name='test'):
+    downloads = db.SingleValue(build_name, 'downloads', 'r')
+    dates = db.MultiValue(build_name, 'dates', 'w')
 
-class BuildHistograms(mr.Job):
-    # input from FetchDownloads
+    for id, download in util.notifying_iter(downloads, 'histograms.collate_dates', interval=10000):
+        dates.put(download['doi'], id)
 
-    @staticmethod
-    def map((id, download), params):
-        doi = download['doi']
-        date = download['date']
-        yield doi, date
+    dates.sync()
 
-    sort = True
-    @staticmethod
-    def reduce(iter, params):
-        for doi, dates in disco.util.kvgroup(iter):
-            yield doi, Histogram(dates, params['min_date'], params['max_date'])
+def build_histograms(min_date, max_date, build_name='test'):
+    downloads = db.SingleValue(build_name, 'downloads', 'r')
+    dates = db.MultiValue(build_name, 'dates', 'r')
+    histograms = db.SingleValue(build_name, 'histograms', 'w')
 
-def build(downloads, build_name='test'):
-    find_data_range = FindDataRange().run(input=[downloads])
-    data_range = dict(disco.core.result_iterator(find_data_range.wait()))
-    find_data_range.purge()
+    for doi, ids in util.notifying_iter(dates, 'histograms.build_histograms'):
+        histogram = Histogram((downloads.get(id)['date'] for id in ids), min_date, max_date)
+        histograms.put(doi, histogram)
 
-    histograms = BuildHistograms().run(input=[downloads], params=data_range)
+    histograms.sync()
 
-    def year_month(date):
-        return datetime.date(date.year, date.month, 1)
-    mr.write_results(histograms.wait(), build_name, 'histograms/monthly', lambda histogram: histogram.grouped_by(year_month).dumps())
-
-    today = datetime.date.today()
-    thirty_days_ago = today - datetime.timedelta(days=30)
-    mr.write_results(histograms.wait(), build_name, 'histograms/daily', lambda histogram: histogram.restricted_to(thirty_days_ago, today).dumps())
-
-    histograms.purge()
+def build(build_name='test'):
+    (min_date, max_date) = find_date_range(build_name)
+    collate_dates(build_name)
+    build_histograms(min_date, max_date, build_name)

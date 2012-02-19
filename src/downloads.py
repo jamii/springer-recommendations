@@ -4,11 +4,8 @@ import re
 import datetime
 import pymongo
 
-import mr
 import util
 import db
-
-import disco.schemes.scheme_raw
 
 # for some reason the dates are stored as integers...
 def date_to_int(date):
@@ -27,6 +24,6 @@ def fetch(db_name, collection_name, start_date=datetime.date.min, build_name='te
         doi = log['doi'].encode('utf8')
         date = int_to_date(int(log['d']))
         ip = log['ip'].encode('utf8')
-        downloads.put(id,{'id':id, 'doi':doi, 'date':date, 'ip':ip})
+        downloads.put(id, {'id':id, 'doi':doi, 'date':date, 'ip':ip})
 
     downloads.sync()

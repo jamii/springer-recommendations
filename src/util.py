@@ -3,17 +3,6 @@ import datetime
 import re
 import itertools
 
-def encode(js):
-    """Convert all unicode objects in a json structure to str<utf8> for disco interop"""
-    if type(js) is dict:
-        return dict([(encode(key), encode(value)) for key, value in js.items()])
-    elif type(js) is list:
-        return [encode(elem) for elem in js]
-    elif type(js) is unicode:
-        return js.encode('utf8')
-    else:
-        return js
-
 def date(string):
     """Date of a yyyy-mm-dd string"""
     return datetime.date(int(string[0:4]), int(string[5:7]), int(string[8:10]))
