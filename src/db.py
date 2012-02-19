@@ -92,4 +92,4 @@ class MultiValue(Abstract):
     def __iter__(self):
         assert (self.mode == 'r')
         for key, values in itertools.groupby(self.__kv_iter(), lambda (key, value): key):
-            yield key, (value for (key,value) in values)
+            yield key, [value for (key,value) in values]
