@@ -65,7 +65,6 @@ def calculate_scores(limit=5, build_name='test'):
 
     scores.sync()
 
-def build(input, build_name='test', limit=5):
-    downloads = from_disco(input)
+def build(downloads, build_name='test', limit=5):
     collate_downloads(downloads, build_name)
     calculate_scores(limit, build_name)
