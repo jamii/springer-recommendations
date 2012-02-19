@@ -2,6 +2,7 @@
 
 import leveldb
 import cPickle as pickle
+import struct
 import os
 import os.path
 
@@ -50,43 +51,42 @@ class SingleValue(Abstract):
         for key, values in self.db.RangeIter():
             yield key, pickle.loads(values)
 
-SEP = chr(0)
-END = chr(1)
+pair_struct = struct.Struct('I')
 
-def no_seps(string):
-    try:
-        string.index(SEP)
-        return False
-    except ValueError:
-        try:
-            string.index(END)
-            return False
-        except ValueError:
-            return True
+def pack(string):
+    return pair_struct.pack(len(string)) + string
+
+def pair(key, value):
+    return pack(key) + pack(value)
+
+def unpair(string):
+    key_len, = pair_struct.unpack(string[0:4])
+    value_len, = pair_struct.unpack(string[4:8])
+    return string[2:2+key_len], string[2+key_len:2+key_len+value_len]
+
+def value(string):
+    key_len = pair_struct.unpack(string[0:4])
+    value_len = pair_struct.unpack(string[4:8])
+    return string[2+key_len:2+key_len+value_len]
 
 class MultiValue(Abstract):
     """Maps each string key to a set of strings which can be updated incrementally"""
 
     def iterget(self, key):
         assert (self.mode == 'r')
-        assert (no_seps(key))
-        for kv in self.db.RangeIter(key_from=key+SEP, key_to=key+END, include_value=False):
-            i = kv.index(SEP)
-            yield kv[i+1:]
+        for kv in self.db.RangeIter(key_from=pack(key)+chr(0), key_to=pack(key)+chr(255), include_value=False):
+            yield value(kv)
 
     def get(self, key):
         return list(self.iterget(key))
 
     def put(self, key, value):
         assert (self.mode == 'w')
-        assert (no_seps(key))
-        assert (no_seps(value))
-        Abstract.put(self, key + SEP + value, "")
+        Abstract.put(self, pair(key, value), "")
 
     def __kv_iter(self):
         for kv in self.db.RangeIter(include_value=False):
-            i = kv.index(SEP)
-            yield kv[:i], kv[i+1:]
+            yield unpair(kv)
 
     def __iter__(self):
         assert (self.mode == 'r')
