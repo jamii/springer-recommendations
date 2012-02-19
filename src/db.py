@@ -62,13 +62,16 @@ def pair(key, value):
 
 def unpair(string):
     key_len, = pair_struct.unpack(string[0:4])
-    value_len, = pair_struct.unpack(string[4:8])
-    return string[8:8+key_len], string[8+key_len:8+key_len+value_len]
+    key = string[4:4+key_len]
+    value_len, = pair_struct.unpack(string[4+key_len:8+key_len])
+    value = string[8+key_len:8+key_len+value_len]
+    return key, value
 
 def value(string):
     key_len, = pair_struct.unpack(string[0:4])
-    value_len, = pair_struct.unpack(string[4:8])
-    return string[8+key_len:8+key_len+value_len]
+    value_len, = pair_struct.unpack(string[4+key_len:8+key_len])
+    value = string[8+key_len:8+key_len+value_len]
+    return value
 
 class MultiValue(Abstract):
     """Maps each string key to a set of strings which can be updated incrementally"""
