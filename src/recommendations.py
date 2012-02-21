@@ -17,49 +17,62 @@ import json
 import heapq
 import collections
 import operator
+import array
 
 import db
 import util
 import settings
 
-def assign_ids(build_name='test'):
+def collate_downloads(build_name='test'):
     downloads = db.SingleValue(build_name, 'downloads')
     ip_ids = db.Ids(build_name, 'ip')
     doi_ids = db.Ids(build_name, 'doi')
+    ip2dois = db.MultiValue(build_name, 'ip2dois')
+    doi2ips = db.MultiValue(build_name, 'doi2ips')
 
-    next_ip_id = 0
-    next_doi_id = 0
+    id_struct = db.id_struct
 
-    for _, download in util.notifying_iter(downloads, 'recommendations.assign_ids'):
-        ip_id = ip_ids.get_id(download['ip'])
-        doi_id = doi_ids.get_id(download['doi'])
-        yield (ip_id, doi_id)
+    for _, download in util.notifying_iter(downloads, 'recommendations.collate_downloads'):
+        ip = id_struct.pack(ip_ids.get_id(download['ip']))
+        doi = id_struct.pack(doi_ids.get_id(download['doi']))
+        ip2dois.put(ip, doi)
+        doi2ips.put(doi, ip)
 
-def calculate_scores(limit=5, build_name='test'):
-    ip2dois = collections.defaultdict(set)
-    doi2ips = collections.defaultdict(set)
+    return (ip_ids.next_id, doi_ids.next_id)
+
+id_struct = db.id_struct
+
+def calculate_scores(num_ips, num_dois, limit=5, build_name='test'):
     scores = db.SingleValue(build_name, 'scores')
+    doi2ips_db = db.MultiValue(build_name, 'doi2ips')
+    ip2dois = [None] * num_ips
+    doi2ips = [None] * num_dois
 
-    for ip, doi in util.notifying_iter(assign_ids(build_name), "recommendations.calculate_scores(collate)"):
-        ip2dois[ip].add(doi)
-        doi2ips[doi].add(ip)
+    for doi, ips in util.notifying_iter(db.MultiValue(build_name, 'doi2ips'), "recommendations.calculate_scores(doi2ips)"):
+        doi = id_struct.unpack(doi)[0]
+        doi2ips[doi] = array.array('L', (id_struct.unpack(ip)[0] for ip in ips))
+
+    for ip, dois in util.notifying_iter(db.MultiValue(build_name, 'ip2dois'), "recommendations.calculate_scores(ip2dois)"):
+        ip = id_struct.unpack(ip)[0]
+        if len(dois) < settings.max_downloads_per_ip:  # drop the ~0.1% of ips that cause most of the work
+            ip2dois[ip] = array.array('L', (id_struct.unpack(doi)[0] for doi in dois))
+        else:
+            ip2dois[ip] = array.array('L')
 
     ip_ids = db.Ids(build_name, 'ip')
     doi_ids = db.Ids(build_name, 'doi')
 
-    for doi_a, ips_a in util.notifying_iter(doi2ips.iteritems(), "recommendations.calculate_scores(calculate)", interval=1000):
+    for doi_a, ips_a in util.notifying_iter(enumerate(doi2ips), "recommendations.calculate_scores(calculate)", interval=1000):
         doi2ips_common = collections.Counter()
 
         for ip in ips_a:
-            dois = ip2dois.get(ip)
-            if len(dois) < settings.max_downloads_per_ip:  # drop the ~0.1% of ips that cause most of the work
-                for doi in dois:
-                    doi2ips_common[doi] += 1
+            for doi in ip2dois[ip]:
+                doi2ips_common[doi] += 1
 
         def scores_a():
             for doi_b, ips_common in doi2ips_common.iteritems():
                 if doi_b != doi_a:
-                    ips_b = doi2ips.get(doi_b)
+                    ips_b = doi2ips[doi_b]
                     score = (ips_common ** 2.0) / len(ips_a) / len(ips_b)
                     yield (score, doi_b)
 
@@ -67,8 +80,11 @@ def calculate_scores(limit=5, build_name='test'):
         scores.put(doi_ids.get_string(doi_a), [(score, doi_ids.get_string(doi_b)) for score, doi_b in top_scores])
 
 def build(limit=5, build_name='test'):
-    calculate_scores(limit, build_name)
+    (num_ips, num_dois) = collate_downloads(build_name='test')
+    calculate_scores(num_ips, num_dois, build_name='test')
 
 # for easy profiling
 if __name__ == '__main__':
-    calculate_scores(build_name='test')
+    (num_ips, num_dois) = collate_downloads(build_name='test')
+    print 'Nums', num_ips, num_dois
+    calculate_scores(num_ips, num_dois, build_name='test')
