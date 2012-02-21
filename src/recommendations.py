@@ -21,23 +21,19 @@ import db
 import util
 import settings
 
-def collate_downloads(build_name='test'):
+def calculate_scores(limit=5, build_name='test'):
     downloads = db.SingleValue(build_name, 'downloads')
-    ip2dois = db.MultiValue(build_name, 'ip2dois')
-    doi2ips = db.MultiValue(build_name, 'doi2ips')
+    ip2dois = collections.defaultdict(set)
+    doi2ips = collections.defaultdict(set)
+    scores = db.SingleValue(build_name, 'scores')
 
     for _, download in util.notifying_iter(downloads, "recommendations.collate_downloads", interval=10000):
         ip = download['ip']
         doi = download['doi']
-        ip2dois.put(ip, doi)
-        doi2ips.put(doi, ip)
+        ip2dois[ip].add(doi)
+        doi2ips[doi].add(ip)
 
-def calculate_scores(limit=5, build_name='test'):
-    ip2dois = db.MultiValue(build_name, 'ip2dois')
-    doi2ips = db.MultiValue(build_name, 'doi2ips')
-    scores = db.SingleValue(build_name, 'scores')
-
-    for doi_a, ips_a in util.notifying_iter(doi2ips, "recommendations.calculate_scores", interval=1000):
+    for doi_a, ips_a in util.notifying_iter(doi2ips.iteritems(), "recommendations.calculate_scores", interval=1000):
         doi2ips_common = collections.Counter()
 
         for ip in ips_a:
@@ -55,8 +51,7 @@ def calculate_scores(limit=5, build_name='test'):
 
         scores.put(doi_a, heapq.nlargest(limit, scores_a()))
 
-def build(build_name='test', limit=5):
-    collate_downloads(build_name)
+def build(limit=5, build_name='test'):
     calculate_scores(limit, build_name)
 
 # for easy profiling
