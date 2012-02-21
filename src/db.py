@@ -114,6 +114,11 @@ class String2Id(Abstract):
         self.batch_dict.clear()
         Abstract.sync(self, really)
 
+    def __iter__(self):
+        self.sync()
+        for string, id in self.db.RangeIter():
+            yield string, id_struct.unpack(id)[0]
+
 class Id2String(Abstract):
     def get(self, id):
         self.sync()
@@ -122,13 +127,21 @@ class Id2String(Abstract):
     def put(self, id, string):
         Abstract.put(self, id_struct.pack(id), string)
 
+    def __iter__(self):
+        self.sync()
+        for id, string in self.db.RangeIter():
+            yield id_struct.unpack(id)[0], string
+
 class Ids():
     """A bijection between string keys and auto-assigned integer ids"""
 
     def __init__(self, build_name, string_name, batch_size=1000):
-        self.next_id = 0
         self.string2id = String2Id(build_name, "%s2id" % string_name, batch_size)
         self.id2string = Id2String(build_name, "id2%s" % string_name, batch_size)
+        try:
+            self.next_id = max((id for id, _ in self.id2string)) + 1
+        except ValueError:
+            self.next_id = 0
 
     def get_id(self, string):
         try:
@@ -138,6 +151,7 @@ class Ids():
             self.next_id += 1
             self.string2id.put(string, id)
             self.id2string.put(id, string)
+            return id
 
     def get_string(self, id):
         return self.id2string.get(id)
