@@ -62,7 +62,7 @@ def calculate_scores(limit=5, build_name='test'):
                     score = (ips_common ** 2.0) / len(ips_a) / len(ips_b)
                     yield (score, doi_b)
 
-        top_scores = heapq.nlargest(limit, scores_a())
+        top_scores = heapq.nlargest(limit, scores_a(), key=lambda (score,_): score)
         scores.put(doi_ids.get_string(doi_a), [(score, doi_ids.get_string(doi_b)) for score, doi_b in top_scores])
 
 def build(limit=5, build_name='test'):
