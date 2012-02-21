@@ -21,19 +21,32 @@ import db
 import util
 import settings
 
-def calculate_scores(limit=5, build_name='test'):
+def assign_ids(build_name='test'):
     downloads = db.SingleValue(build_name, 'downloads')
+    ip_ids = db.Ids(build_name, 'ip')
+    doi_ids = db.Ids(build_name, 'doi')
+
+    next_ip_id = 0
+    next_doi_id = 0
+
+    for _, download in util.notifying_iter(downloads, 'recommendations.assign_ids'):
+        ip_id = ip_ids.get_id(download['ip'])
+        doi_id = doi_ids.get_id(download['doi'])
+        yield (ip_id, doi_id)
+
+def calculate_scores(limit=5, build_name='test'):
     ip2dois = collections.defaultdict(set)
     doi2ips = collections.defaultdict(set)
     scores = db.SingleValue(build_name, 'scores')
 
-    for _, download in util.notifying_iter(downloads, "recommendations.collate_downloads", interval=10000):
-        ip = download['ip']
-        doi = download['doi']
+    for ip, doi in util.notifying_iter(assign_ids(build_name), "recommendations.calculate_scores(collate)"):
         ip2dois[ip].add(doi)
         doi2ips[doi].add(ip)
 
-    for doi_a, ips_a in util.notifying_iter(doi2ips.iteritems(), "recommendations.calculate_scores", interval=1000):
+    ip_ids = db.Ids(build_name, 'ip')
+    doi_ids = db.Ids(build_name, 'doi')
+
+    for doi_a, ips_a in util.notifying_iter(doi2ips.iteritems(), "recommendations.calculate_scores(calculate)", interval=1000):
         doi2ips_common = collections.Counter()
 
         for ip in ips_a:
@@ -49,7 +62,8 @@ def calculate_scores(limit=5, build_name='test'):
                     score = (ips_common ** 2.0) / len(ips_a) / len(ips_b)
                     yield (score, doi_b)
 
-        scores.put(doi_a, heapq.nlargest(limit, scores_a()))
+        top_scores = heapq.nlargest(limit, scores_a())
+        scores.put(doi_ids.get_string(doi_a), [(score, doi_ids.get_string(doi_b)) for score, doi_b in top_scores])
 
 def build(limit=5, build_name='test'):
     calculate_scores(limit, build_name)

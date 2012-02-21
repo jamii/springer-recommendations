@@ -91,3 +91,53 @@ class MultiValue(Abstract):
         self.sync()
         for key, values in itertools.groupby(self.__kv_iter(), lambda (key, value): key):
             yield key, [value for (key,value) in values]
+
+id_struct = struct.Struct('L')
+
+class String2Id(Abstract):
+    def __init__(self, build_name, db_name, batch_size=1000):
+        self.batch_dict = {}
+        Abstract.__init__(self, build_name, db_name, batch_size)
+
+    def get(self, string):
+        try:
+            return self.batch_dict[string]
+        except KeyError:
+            id, = id_struct.unpack(self.db.Get(string))
+            return id
+
+    def put(self, string, id):
+        self.batch_dict[string] = id
+        Abstract.put(self, string, id_struct.pack(id))
+
+    def sync(self, really=True):
+        self.batch_dict.clear()
+        Abstract.sync(self, really)
+
+class Id2String(Abstract):
+    def get(self, id):
+        self.sync()
+        return self.db.Get(id_struct.pack(id))
+
+    def put(self, id, string):
+        Abstract.put(self, id_struct.pack(id), string)
+
+class Ids():
+    """A bijection between string keys and auto-assigned integer ids"""
+
+    def __init__(self, build_name, string_name, batch_size=1000):
+        self.next_id = 0
+        self.string2id = String2Id(build_name, "%s2id" % string_name, batch_size)
+        self.id2string = Id2String(build_name, "id2%s" % string_name, batch_size)
+
+    def get_id(self, string):
+        try:
+            return self.string2id.get(string)
+        except KeyError:
+            id = self.next_id
+            self.next_id += 1
+            self.string2id.put(string, id)
+            self.id2string.put(id, string)
+
+    def get_string(self, id):
+        return self.id2string.get(id)
