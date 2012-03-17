@@ -4,12 +4,11 @@ import os.path
 import itertools
 import tempfile
 import operator
+import pymongo
 
 import db
 import recommendations
 import main
-
-import disco.ddfs
 
 def cliqueness(build_name, dois):
     """Percentage of recommendations for this set which are not in this set"""
@@ -94,32 +93,32 @@ unit_results = {
 class UnitTestError(Exception):
     pass
 
-def unit_input(build_name, data):
-    log_format = '{ _id: ObjectId(\'foo\'), d: 20110101, doi: "%s", i: "0000-0000", s: 0, ip: "192.0.2.%s" }\n'
-    logs = ((log_format % (doi, ip) for doi, ips in data.items() for ip in ips))
+def unit_drop(collection_name):
+    collection = pymongo.Connection()['test'][collection_name]
+    collection.drop()
 
-    _, name = tempfile.mkstemp()
-    with open(name, 'w') as file:
-        file.writelines(logs)
+def unit_input(collection_name, data):
+    collection = pymongo.Connection()['test'][collection_name]
 
-    tag = 'test:' + build_name
-    ddfs = disco.ddfs.DDFS()
-    ddfs.delete(tag)
-    ddfs.chunk(tag, ['file://' + name])
-
-    return tag
+    for doi, ips in data.items():
+        for ip in ips:
+            log = {'d': 20110101, 'i': '0000-0000', 's': '0', 'doi':doi, 'ip':('192.0.2.%s' % ip)}
+            collection.save(log, safe=True)
 
 def unit_check_results(build_name, results):
+    scores = db.SingleValue(build_name, 'scores')
+
     failed = False
-    for doi in results:
-        expected = results[doi]
-        actual = mr.get_result(build_name, 'recommendations', doi)
+
+    for doi, expected in results.items():
+        expected = [(score, other_doi) for [score, other_doi] in expected]
+        actual = scores.get(doi)
         if actual != sorted(actual, key=operator.itemgetter(0), reverse=True): # must be sorted by score
             print 'Result is not sorted for doi', doi
             print actual
             print '-' * 40
             failed = True
-        if actual != expected:
+        if [score for (score,_) in actual] != [score for (score,_) in expected]:
             print 'Results did not match on doi', doi
             print 'Expected:', expected
             print 'Actual:', actual
@@ -131,19 +130,22 @@ def unit_check_results(build_name, results):
         print 'Passed!'
 
 def unit_base(build_name='unit-base'):
-    mr.drop_results(build_name)
-    db.drop(recommendations.db_name(build_name))
-    main.build_all(input=[unit_input(build_name, unit_data)], build_name=build_name)
+    collection_name = 'unit-test-' + build_name
+    unit_drop(collection_name)
+    unit_input(collection_name, unit_data)
+    main.build_all('test', collection_name, build_name=build_name)
     unit_check_results(build_name, unit_results)
 
 def unit_merge(build_name='unit-merge'):
-    half_a = dict([(doi, ips[0::2]) for doi, ips in unit_data[0::2]] + [(doi, ips[1::2]) for doi, ips in unit_data[1::2]])
-    half_b = dict([(doi, ips[1::2]) for doi, ips in unit_data[0::2]] + [(doi, ips[0::2]) for doi, ips in unit_data[1::2]])
+    half_a = dict([(doi, ips[0::2]) for doi, ips in unit_data.items()[0::2]] + [(doi, ips[1::2]) for doi, ips in unit_data.items()[1::2]])
+    half_b = dict([(doi, ips[1::2]) for doi, ips in unit_data.items()[0::2]] + [(doi, ips[0::2]) for doi, ips in unit_data.items()[1::2]])
 
-    mr.drop_results(build_name)
-    db.drop(recommendations.db_name(build_name))
-    main.build_all(input=[unit_input(build_name, half_a)], build_name=build_name)
-    main.build_all(input=[unit_input(build_name, half_b)], build_name=build_name)
+    collection_name = 'unit-test-' + build_name
+    unit_drop(collection_name)
+    unit_input(collection_name, half_a)
+    main.build_all('test', collection_name, build_name=build_name)
+    unit_input(collection_name, half_b)
+    main.build_all('test', collection_name, build_name=build_name)
     unit_check_results(build_name, unit_results)
 
 # test symmetry
