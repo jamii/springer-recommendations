@@ -49,8 +49,8 @@ class SingleValue(Abstract):
 
     def __iter__(self):
         self.sync()
-        for key, values in self.db.RangeIter():
-            yield key, pickle.loads(values)
+        for key, value in self.db.RangeIter():
+            yield key, pickle.loads(value)
 
 key_struct = struct.Struct('64p')
 value_struct = struct.Struct('64x 64p')
