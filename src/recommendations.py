@@ -44,7 +44,6 @@ id_struct = db.id_struct
 
 def calculate_scores(num_ips, num_dois, build_name, limit=5):
     scores = db.SingleValue(build_name, 'scores')
-    doi2ips_db = db.MultiValue(build_name, 'doi2ips')
     ip2dois = [None] * num_ips
     doi2ips = [None] * num_dois
 
