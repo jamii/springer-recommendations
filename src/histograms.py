@@ -59,7 +59,13 @@ class Histogram():
         counts = sorted( [(str(date), value) for date, value in self.counts.items()] )
         return json.dumps({'start_date': str(self.start_date), 'end_date': str(self.end_date), 'counts': counts})
 
-def find_date_range(build_name='test'):
+    def __eq__(self, other):
+        return (self.start_date == other.start_date) and (self.end_date == other.end_date) and (self.counts == other.counts)
+
+    def __ne__(self, other):
+        return (self.start_date != other.start_date) or (self.end_date != other.end_date) or (self.counts != other.counts)
+
+def find_date_range(build_name):
     downloads = db.SingleValue(build_name, 'downloads')
 
     min_date = datetime.date.max
@@ -70,14 +76,14 @@ def find_date_range(build_name='test'):
 
     return (min_date, max_date)
 
-def collate_dates(build_name='test'):
+def collate_dates(build_name):
     downloads = db.SingleValue(build_name, 'downloads')
     dates = db.MultiValue(build_name, 'dates')
 
     for id, download in util.notifying_iter(downloads, 'histograms.collate_dates'):
         dates.put(download['doi'], id)
 
-def build_histograms(min_date, max_date, build_name='test'):
+def build_histograms(min_date, max_date, build_name):
     downloads = db.SingleValue(build_name, 'downloads')
     dates = db.MultiValue(build_name, 'dates')
     histograms = db.SingleValue(build_name, 'histograms')
@@ -86,7 +92,7 @@ def build_histograms(min_date, max_date, build_name='test'):
         histogram = Histogram((downloads.get(id)['date'] for id in ids), min_date, max_date)
         histograms.put(doi, histogram)
 
-def build(build_name='test'):
+def build(build_name):
     (min_date, max_date) = find_date_range(build_name)
     collate_dates(build_name)
     build_histograms(min_date, max_date, build_name)

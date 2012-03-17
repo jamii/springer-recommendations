@@ -23,7 +23,7 @@ import db
 import util
 import settings
 
-def collate_downloads(build_name='test'):
+def collate_downloads(build_name):
     downloads = db.SingleValue(build_name, 'downloads')
     ip_ids = db.Ids(build_name, 'ip')
     doi_ids = db.Ids(build_name, 'doi')
@@ -42,7 +42,7 @@ def collate_downloads(build_name='test'):
 
 id_struct = db.id_struct
 
-def calculate_scores(num_ips, num_dois, limit=5, build_name='test'):
+def calculate_scores(num_ips, num_dois, build_name, limit=5):
     scores = db.SingleValue(build_name, 'scores')
     doi2ips_db = db.MultiValue(build_name, 'doi2ips')
     ip2dois = [None] * num_ips
@@ -79,9 +79,9 @@ def calculate_scores(num_ips, num_dois, limit=5, build_name='test'):
         top_scores = heapq.nlargest(limit, scores_a(), key=operator.itemgetter(0))
         scores.put(doi_ids.get_string(doi_a), [(score, doi_ids.get_string(doi_b)) for score, doi_b in top_scores])
 
-def build(limit=5, build_name='test'):
-    (num_ips, num_dois) = collate_downloads(build_name='test')
-    calculate_scores(num_ips, num_dois, build_name='test')
+def build(build_name, limit=5):
+    (num_ips, num_dois) = collate_downloads(build_name)
+    calculate_scores(num_ips, num_dois, build_name)
 
 # for easy profiling
 if __name__ == '__main__':

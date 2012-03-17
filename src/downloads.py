@@ -13,7 +13,7 @@ def date_to_int(date):
 def int_to_date(int):
     return datetime.date(int // 10000, int % 10000 // 100, int % 100)
 
-def fetch(db_name, collection_name, start_date=datetime.date.min, build_name='test'):
+def fetch(db_name, collection_name, build_name, start_date=datetime.date.min):
     downloads = db.SingleValue(build_name, 'downloads')
     collection = pymongo.Connection()[db_name][collection_name]
 
