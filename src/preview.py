@@ -6,7 +6,7 @@ import httplib, urllib
 import json
 
 import util
-import mr
+import db
 
 keys = json.load(open('keys'))
 
@@ -20,7 +20,7 @@ def metadata(doi):
     conn.close()
 
     if status == 200:
-        meta = util.encode(json.loads(data)) # !!! metadata encoding?
+        meta = json.loads(data)
         if meta['records']:
             return meta
         else:
@@ -41,9 +41,9 @@ def recommendations(build_name, doi):
     print title(doi)
     print link(doi)
     print
-    dois = mr.get_result(build_name, 'recommendations', doi)
+    scores = db.SingleValue(build_name, 'scores', 'r').get(doi)
     print '-' * 40
-    for (score, doi) in dois:
+    for (score, doi) in scores:
         print score
         print title(doi)
         print link(doi)
