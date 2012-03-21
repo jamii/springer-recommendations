@@ -18,10 +18,11 @@ def fetch(db_name, collection_name, build_name, start_date=datetime.date.min):
     collection = pymongo.Connection()[db_name][collection_name]
 
     d = date_to_int(start_date)
-    logs = collection.find({'d':{'$gte':d}})
+    logs = collection.find({'d':{'$gte':d}, 'si':{'$exists':true}})
     for log in util.notifying_iter(logs, "downloads.fetch", interval=10000):
         id = str(log['_id'])
         doi = log['doi'].encode('utf8')
         date = int_to_date(int(log['d']))
         ip = log['ip'].encode('utf8')
-        downloads.put(id, {'id':id, 'doi':doi, 'date':date, 'ip':ip})
+        si = log['si'].encode('utf8')
+        downloads.put(id, {'id':id, 'doi':doi, 'date':date, 'ip':ip, 'si':si})
