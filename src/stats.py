@@ -22,7 +22,7 @@ def value_extremes(iter, n, unpack=lambda x: x):
 
     return [(unpack(key), value) for value, key in largest]
 
-def plot_doi_si(build_name):
+def plot_doi_si(build_name, filename=None):
     plot.subplot(121)
     doi2sis = db.MultiValue(build_name, 'doi2sis')
     doi_ids = db.Ids(build_name, 'doi')
@@ -45,4 +45,9 @@ def plot_doi_si(build_name):
     plot.xlabel('Number of dois downloaded')
     plot.ylabel('Frequency')
 
-    plot.show()
+    if filename is None:
+        plot.show()
+    else:
+        fig = plot.gcf()
+        fig.set_size_inches(18.5,10.5)
+        plot.savefig(filename)
