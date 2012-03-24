@@ -2,6 +2,7 @@ import gzip
 import datetime
 import re
 import itertools
+import sys
 
 def date(string):
     """Date of a yyyy-mm-dd string"""
@@ -42,9 +43,12 @@ def notifying_iter(iter, name, interval=10000):
     name = name + ":"
     i = 0
     print name, 'starting'
+    sys.stdout.flush()
     for value in iter:
         i += 1
         if i % interval == 0:
             print name, i
+            sys.stdout.flush()
         yield value
     print name, 'finished'
+    sys.stdout.flush()
