@@ -53,7 +53,10 @@ def calculate_scores(num_sis, num_dois, build_name, limit=5):
 
     for si, dois in util.notifying_iter(db.MultiValue(build_name, 'si2dois'), "recommendations.calculate_scores(si2dois)"):
         si = id_struct.unpack(si)[0]
-        si2dois[si] = array.array('L', (id_struct.unpack(doi)[0] for doi in dois))
+        if len(dois) < settings.max_downloads_per_si:  # drop the ~0.1% of sis that cause most of the work
+            si2dois[si] = array.array('L', (id_struct.unpack(doi)[0] for doi in dois))
+        else:
+            si2dois[si] = array.array('L')
 
     si_ids = db.Ids(build_name, 'si')
     doi_ids = db.Ids(build_name, 'doi')
