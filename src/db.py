@@ -52,21 +52,25 @@ class SingleValue(Abstract):
         for key, value in self.db.RangeIter():
             yield key, pickle.loads(value)
 
-key_struct = struct.Struct('64p')
-value_struct = struct.Struct('64x 64p')
-pair_struct = struct.Struct('64p 64p')
+pair_struct = struct.Struct('I')
 
 def pack_key(key):
-    return key_struct.pack(key)
+    return pair_struct.pack(len(key)) + key
 
 def pair(key, value):
-    return pair_struct.pack(key, value)
+    return pack_key(key) + pack_key(value)
 
 def unpair(string):
-    return pair_struct.unpack(string)
+    key_len, = pair_struct.unpack(string[0:4])
+    key = string[4:4+key_len]
+    value_len, = pair_struct.unpack(string[4+key_len:8+key_len])
+    value = string[8+key_len:8+key_len+value_len]
+    return key, value
 
 def unpack_value(string):
-    value, = value_struct.unpack(string)
+    key_len, = pair_struct.unpack(string[0:4])
+    value_len, = pair_struct.unpack(string[4+key_len:8+key_len])
+    value = string[8+key_len:8+key_len+value_len]
     return value
 
 class MultiValue(Abstract):
@@ -92,7 +96,7 @@ class MultiValue(Abstract):
         for key, values in itertools.groupby(self.__kv_iter(), lambda (key, value): key):
             yield key, [value for (key,value) in values]
 
-id_struct = struct.Struct('L')
+id_struct = struct.Struct('I')
 
 class String2Id(Abstract):
     def __init__(self, build_name, db_name, batch_size=1000):

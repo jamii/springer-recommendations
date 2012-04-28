@@ -23,14 +23,14 @@ import db
 import util
 import settings
 
+id_struct = db.id_struct
+
 def collate_downloads(build_name):
     downloads = db.SingleValue(build_name, 'downloads')
     si_ids = db.Ids(build_name, 'si')
     doi_ids = db.Ids(build_name, 'doi')
     si2dois = db.MultiValue(build_name, 'si2dois')
     doi2sis = db.MultiValue(build_name, 'doi2sis')
-
-    id_struct = db.id_struct
 
     for _, download in util.notifying_iter(downloads, 'recommendations.collate_downloads'):
         si = id_struct.pack(si_ids.get_id(download['si']))
@@ -39,8 +39,6 @@ def collate_downloads(build_name):
         doi2sis.put(doi, si)
 
     return (si_ids.next_id, doi_ids.next_id)
-
-id_struct = db.id_struct
 
 def calculate_scores(num_sis, num_dois, build_name, limit=5):
     scores = db.SingleValue(build_name, 'scores')
