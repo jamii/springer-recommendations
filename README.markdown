@@ -2,7 +2,7 @@
 
 Install dependencies
 
-     sudo apt-get install build-essential python python-dev ipython python-pymongo git-core mongodb autoconf automake libtool pkg-config
+     sudo apt-get install build-essential python python-dev ipython python-pymongo python-flask git-core mongodb autoconf automake libtool pkg-config
 
 Setup py-leveldb
 
@@ -17,6 +17,7 @@ Setup springer-recommendations
     git clone git://github.com/jamii/springer-recommendations.git
     sudo mkdir -p /mnt/var/springer-recommendations
     sudo chown $USER:$USER /mnt/var/springer-recommendations
+    sudo ufw allow 80
 
 Setup mongodb
 
