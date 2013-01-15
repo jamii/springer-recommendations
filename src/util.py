@@ -1,10 +1,11 @@
 import sys
+from datetime import datetime
 
 def log(name, event):
-    print name, event
+    print datetime.now(), name, event
     sys.stdout.flush()
 
-def logged(name, iter, interval=10000):
+def logged(name, iter, interval=1000000):
     i = 0
     log(name, 'starting')
     for value in iter:
