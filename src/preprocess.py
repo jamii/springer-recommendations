@@ -17,6 +17,7 @@ def int_to_date(int):
 
 unpack_prefix = struct.Struct('i').unpack
 
+# TODO: might be worth manually decoding the bson here and just picking out si/doi. could also avoid the utf8 encode later.
 def _from_dump(dump_filename):
     """Read a mongodb dump containing bson-encoded download logs"""
     dump_file = open(dump_filename, 'rb')
