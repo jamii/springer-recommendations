@@ -126,9 +126,11 @@ def to_matrix_market(logs):
 
     util.log('to_matrix_market', 'finished')
 
-    return mm
+    return users, dois, mm
 
 if __name__ == '__main__':
     import itertools
-    mm = to_matrix_market(from_dump('/mnt/var/Mongo3-backup/LogsRaw-20130113.bson'))
-    os.rename(mm.name, 'out.mm')
+    users, dois, mm = to_matrix_market(from_dump('/mnt/var/Mongo3-backup/LogsRaw-20130113.bson'))
+    os.rename(users.name, '/mnt/var/springer-recommendations/users')
+    os.rename(dois.name, '/mnt/var/springer-recommendations/dois')
+    os.rename(mm.name, '/mnt/var/springer-recommendations/mm')
