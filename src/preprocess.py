@@ -40,7 +40,8 @@ def from_dump(dump_filename):
 # We're going to build up abstractions allowing us to treat temporary files somewhat like python lists
 
 def temp_file():
-    file = tempfile.NamedTemporaryFile()
+    # We make the tempfile in the current directory because the target machine has little space on /tmp
+    file = tempfile.NamedTemporaryFile(dir="/mnt/var/springer-recommendations/")
     util.log('temp_file', file.name)
     return file
 
