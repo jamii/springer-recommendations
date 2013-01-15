@@ -74,7 +74,7 @@ def labelled_file(in_file, label_file):
     out_file = temp_file()
     label = label_file.readline().rstrip()
     index = 0
-    for pair in util.logged('labelled_file in', in_file.readlines()):
+    for pair in util.logged('labelled_file in', in_file):
         fst, snd = unpack_pair(pair.rstrip())
         while fst != label:
             label = label_file.readline().rstrip()
@@ -119,7 +119,7 @@ def to_matrix_market(logs):
     mm = temp_file()
     mm.write('%%MatrixMarket matrix coordinate integer general\n')
     mm.write('%i %i %i\n' % (num_users, num_dois, num_edges))
-    for pair in edges.readlines():
+    for pair in edges:
         user_index, doi_index = unpack_pair(pair.rstrip())
         mm.write("%s %s 1\n" % (user_index, doi_index))
     mm.flush()
