@@ -4,21 +4,22 @@ import os
 import struct
 import subprocess
 import tempfile
+import itertools
+import random
+import heapq
 
 import bson
+import ujson
 
 import util
 
-# For some reason the dates are stored as integers...
-def date_to_int(date):
-    return date.year * 10000 + date.month * 100 + date.day
-def int_to_date(int):
-    return datetime.date(int // 10000, int % 10000 // 100, int % 100)
+data_dir = "/mnt/var/springer-recommendations/"
 
 unpack_prefix = struct.Struct('i').unpack
 
 # TODO: might be worth manually decoding the bson here and just picking out si/doi. could also avoid the utf8 encode later.
-def _from_dump(dump_filename):
+@util.logged_gen
+def from_dump(dump_filename):
     """Read a mongodb dump containing bson-encoded download logs"""
     dump_file = open(dump_filename, 'rb')
 
@@ -35,103 +36,97 @@ def _from_dump(dump_filename):
             if download.get('si', '') and download.get('doi', ''):
                 yield download
 
-def from_dump(dump_filename):
-    return util.logged('from_dump', _from_dump(dump_filename))
+class Stash():
+    """Read-only on-disk cache of a list of rows"""
+    def __init__(self):
+        self.file = tempfile.NamedTemporaryFile(dir=data_dir)
+        self.name = self.file.name
+        util.log('stash', self.name)
 
-# We're going to build up abstractions allowing us to treat temporary files somewhat like python lists
+    @util.logged_gen
+    def __iter__(self):
+        self.file.seek(0) # always iterate from the start
+        for line in self.file:
+            yield ujson.loads(line.rstrip())
 
-def temp_file():
-    # We make the tempfile in the current directory because the target machine has little space on /tmp
-    file = tempfile.NamedTemporaryFile(dir="/mnt/var/springer-recommendations/")
-    util.log('temp_file', file.name)
-    return file
+    def save_as(self, name):
+        os.rename(self.file.name, os.path.join(data_dir, name))
 
-def count_lines(in_file):
-    """Returns len(in_file)"""
-    util.log('count_lines', 'starting')
-    result = subprocess.check_output(['wc', '-l', in_file.name])
-    count, _ = result.split()
-    util.log('count_lines', 'finished')
-    return int(count)
+@util.logged
+def stashed(rows):
+    """Store a list of string rows in a temporary file. Assumes row entries never contain \x00 or \n."""
+    if isinstance(rows, Stash):
+        return rows
+    else:
+        stash = Stash()
+        stash.file.writelines(("%s\n" % ujson.dumps(row) for row in rows))
+        stash.file.flush()
+        return stash
 
-def uniq_sorted_file(in_file):
-    """Returns uniq(sort(in_file))"""
-    util.log('uniq_sorted_file', 'starting')
-    out_file = temp_file()
-    subprocess.check_call(['sort', '-u', in_file.name, '-o', out_file.name])
-    util.log('uniq_sorted_file', 'finished')
-    return out_file
+@util.logged
+def uniq_sorted(rows):
+    """Return rows sorted by pickle order, with duplicate rows removed"""
+    in_stash = stashed(rows)
+    out_stash = Stash()
+    subprocess.check_call(['sort', '-u', in_stash.name, '-o', out_stash.name])
+    return out_stash
 
-# TODO: assumes there are no zero bytes in fst or snd :(
-def pack_pair(fst, snd):
-    return '%s\x00%s' % (fst, snd)
+def grouped(rows):
+    """Return rows grouped by first column"""
+    return itertools.groupby(rows, lambda r: r[0])
 
-def unpack_pair(pair):
-    return pair.split('\x00')
-
-def labelled_file(in_file, label_file):
-    """Returns [(label_file.index(snd) + 1, fst) for fst,snd in in_file]. Requires both files to be sorted."""
-    util.log('labelled_file', 'starting')
-    out_file = temp_file()
-    label = label_file.readline().rstrip()
-    index = 1
-    for pair in util.logged('labelled_file in', in_file):
-        fst, snd = unpack_pair(pair.rstrip())
-        while fst != label:
-            label = label_file.readline().rstrip()
-            assert (label != '')
-            index += 1
-        out_file.write("%s\n" % pack_pair(snd, index))
-    out_file.flush()
-    out_file.seek(0)
-    util.log('labelled_file', 'finished')
-    return out_file
-
-def to_matrix_market(logs):
-    """Returns the download graph in the MatrixMarket format"""
-    util.log('to_matrix_market', 'starting')
-
-    users = temp_file()
-    dois = temp_file()
-    edges = temp_file()
-
+@util.logged_gen
+def edges(logs):
     for log in logs:
         # There is honest-to-god unicode in here eg http://www.fileformat.info/info/unicode/char/2013/index.htm
-        user = log['si'].encode('utf8')
         doi = log['doi'].encode('utf8')
-        users.write('%s\n' % user)
-        dois.write('%s\n' % doi)
-        edges.write('%s\n' % pack_pair(user, doi))
+        user = log['si'].encode('utf8')
+        yield doi, user
 
-    users.flush()
-    dois.flush()
-    edges.flush()
+@util.logged_gen
+def doi_rows(edges):
+    for doi, rows in grouped(uniq_sorted(edges)):
+        users = [row[1] for row in rows]
+        yield doi, users
 
-    users = uniq_sorted_file(users)
-    dois = uniq_sorted_file(dois)
+@util.logged_gen
+def min_hashes(doi_rows):
+    """Minhash approximation as described by Das, Abhinandan S., et al. "Google news personalization: scalable online collaborative filtering." Proceedings of the 16th international conference on World Wide Web. ACM, 2007. """
+    seed = random.getrandbits(64)
+    for doi, users in doi_rows:
+        hashes = [hash((seed, user)) for user in users]
+        yield min(hashes), doi, users
 
-    edges = labelled_file(uniq_sorted_file(edges), users)
-    edges = labelled_file(uniq_sorted_file(edges), dois)
+def pairs(xs):
+    for i, x1 in enumerate(xs):
+        for x2 in xs[(i+1):]:
+            yield x1, x2
 
-    num_users = count_lines(users)
-    num_dois = count_lines(dois)
-    num_edges = count_lines(edges)
+def jaccard_similarity(users1, users2):
+    return float(len(users1.intersection(users2))) / float(len(users1.union(users2)))
 
-    mm = temp_file()
-    mm.write('%%MatrixMarket matrix coordinate real general\n')
-    mm.write('%i %i %i\n' % (num_users, num_dois, num_edges))
-    for pair in edges:
-        user_index, doi_index = unpack_pair(pair.rstrip())
-        mm.write("%s %s 1.0\n" % (user_index, doi_index))
-    mm.flush()
+@util.logged_gen
+def scores(min_hashes):
+    for min_hash, group in grouped(uniq_sorted(min_hashes)):
+        bucket = [(doi, set(users)) for (_, doi, users) in group]
+        for (doi1, users1), (doi2, users2) in pairs(bucket):
+            score = jaccard_similarity(users1, users2)
+            yield doi1, doi2, score
+            yield doi2, doi1, score
 
-    util.log('to_matrix_market', 'finished')
-
-    return users, dois, mm
+@util.logged_gen
+def recommendations(logs, iterations=1, top_n=5):
+    doi_rows_stash = stashed(doi_rows(edges(logs)))
+    scores_iter = (scores(min_hashes(doi_rows_stash)) for _ in xrange(0, iterations))
+    scores_stash = stashed(itertools.chain.from_iterable(scores_iter))
+    for doi1, group in grouped(uniq_sorted(scores_stash)):
+        top_scores = heapq.nlargest(top_n, ((score, doi2) for (_, doi2, score) in group))
+        yield doi1, top_scores
 
 if __name__ == '__main__':
-    import itertools
-    users, dois, mm = to_matrix_market(from_dump('/mnt/var/Mongo3-backup/LogsRaw-20130113.bson'))
-    os.rename(users.name, '/mnt/var/springer-recommendations/users')
-    os.rename(dois.name, '/mnt/var/springer-recommendations/dois')
-    os.rename(mm.name, '/mnt/var/springer-recommendations/mm')
+    try:
+        logs = itertools.islice(from_dump('/mnt/var/Mongo3-backup/LogsRaw-20130113.bson'), 1000000)
+        recs = recommendations(logs)
+        stashed(recs).save_as('recs')
+    finally:
+        raw_input("Die?")
