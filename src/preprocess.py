@@ -7,6 +7,7 @@ import tempfile
 import itertools
 import random
 import heapq
+import operator
 
 import bson
 import ujson
@@ -18,7 +19,7 @@ data_dir = "/mnt/var/springer-recommendations/"
 unpack_prefix = struct.Struct('i').unpack
 
 # TODO: might be worth manually decoding the bson here and just picking out si/doi. could also avoid the utf8 encode later.
-@util.logged_gen
+@util.logged
 def from_dump(dump_filename):
     """Read a mongodb dump containing bson-encoded download logs"""
     dump_file = open(dump_filename, 'rb')
@@ -36,18 +37,20 @@ def from_dump(dump_filename):
             if download.get('si', '') and download.get('doi', ''):
                 yield download
 
+stashes = []
+
 class Stash():
     """Read-only on-disk cache of a list of rows"""
     def __init__(self):
         self.file = tempfile.NamedTemporaryFile(dir=data_dir)
         self.name = self.file.name
+        stashes.append(self)
         util.log('stash', self.name)
 
-    @util.logged_gen
+    @util.logged
     def __iter__(self):
         self.file.seek(0) # always iterate from the start
-        for line in self.file:
-            yield ujson.loads(line.rstrip())
+        return itertools.imap(ujson.loads, self.file)
 
     def save_as(self, name):
         os.rename(self.file.name, os.path.join(data_dir, name))
@@ -75,7 +78,7 @@ def grouped(rows):
     """Return rows grouped by first column"""
     return itertools.groupby(rows, lambda r: r[0])
 
-@util.logged_gen
+@util.logged
 def edges(logs):
     for log in logs:
         # There is honest-to-god unicode in here eg http://www.fileformat.info/info/unicode/char/2013/index.htm
@@ -83,13 +86,13 @@ def edges(logs):
         user = log['si'].encode('utf8')
         yield doi, user
 
-@util.logged_gen
+@util.logged
 def doi_rows(edges):
     for doi, rows in grouped(uniq_sorted(edges)):
         users = [row[1] for row in rows]
         yield doi, users
 
-@util.logged_gen
+@util.logged
 def min_hashes(doi_rows):
     """Minhash approximation as described by Das, Abhinandan S., et al. "Google news personalization: scalable online collaborative filtering." Proceedings of the 16th international conference on World Wide Web. ACM, 2007. """
     seed = random.getrandbits(64)
@@ -105,7 +108,7 @@ def pairs(xs):
 def jaccard_similarity(users1, users2):
     return float(len(users1.intersection(users2))) / float(len(users1.union(users2)))
 
-@util.logged_gen
+@util.logged
 def scores(min_hashes):
     for min_hash, group in grouped(uniq_sorted(min_hashes)):
         bucket = [(doi, set(users)) for (_, doi, users) in group]
@@ -114,13 +117,13 @@ def scores(min_hashes):
             yield doi1, doi2, score
             yield doi2, doi1, score
 
-@util.logged_gen
+@util.logged
 def recommendations(logs, iterations=1, top_n=5):
     doi_rows_stash = stashed(doi_rows(edges(logs)))
     scores_iter = (scores(min_hashes(doi_rows_stash)) for _ in xrange(0, iterations))
     scores_stash = stashed(itertools.chain.from_iterable(scores_iter))
     for doi1, group in grouped(uniq_sorted(scores_stash)):
-        top_scores = heapq.nlargest(top_n, ((score, doi2) for (_, doi2, score) in group))
+        top_scores = heapq.nlargest(top_n, itertools.imap(operator.itemgetter(2,1), group))
         yield doi1, top_scores
 
 if __name__ == '__main__':
