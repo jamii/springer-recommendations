@@ -68,10 +68,18 @@ def stashed(rows):
 
 @util.logged
 def uniq_sorted(rows):
-    """Return rows sorted by pickle order, with duplicate rows removed"""
+    """Return rows sorted by ujson order, with duplicate rows removed"""
     in_stash = stashed(rows)
     out_stash = Stash()
     subprocess.check_call(['sort', '-u', in_stash.name, '-o', out_stash.name])
+    return out_stash
+
+@util.logged
+def reverse_uniq_sorted(rows):
+    """Return rows sorted by ujson order, with duplicate rows removed"""
+    in_stash = stashed(rows)
+    out_stash = Stash()
+    subprocess.check_call(['sort', '-u', '-r', in_stash.name, '-o', out_stash.name])
     return out_stash
 
 def grouped(rows):
@@ -114,16 +122,16 @@ def scores(min_hashes):
         bucket = [(doi, set(users)) for (_, doi, users) in group]
         for (doi1, users1), (doi2, users2) in pairs(bucket):
             score = jaccard_similarity(users1, users2)
-            yield doi1, doi2, score
-            yield doi2, doi1, score
+            yield doi1, score, doi2
+            yield doi2, score, doi1
 
 @util.logged
 def recommendations(logs, iterations=1, top_n=5):
     doi_rows_stash = stashed(doi_rows(edges(logs)))
     scores_iter = (scores(min_hashes(doi_rows_stash)) for _ in xrange(0, iterations))
     scores_stash = stashed(itertools.chain.from_iterable(scores_iter))
-    for doi1, group in grouped(uniq_sorted(scores_stash)):
-        top_scores = heapq.nlargest(top_n, itertools.imap(operator.itemgetter(2,1), group))
+    for doi1, group in grouped(reverse_uniq_sorted(scores_stash)):
+        top_scores = [(doi2, score) for (_, score, doi2) in itertools.islice(group, top_n)]
         yield doi1, top_scores
 
 if __name__ == '__main__':
