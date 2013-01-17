@@ -16,6 +16,8 @@ import util
 
 data_dir = "/mnt/var/springer-recommendations/"
 
+max_downloads_per_user = 1000
+
 unpack_prefix = struct.Struct('i').unpack
 
 # TODO: might be worth manually decoding the bson here and just picking out si/doi. could also avoid the utf8 encode later.
@@ -51,6 +53,12 @@ class Stash():
     def __iter__(self):
         self.file.seek(0) # always iterate from the start
         return itertools.imap(ujson.loads, self.file)
+
+    @util.logged
+    def __len__(self):
+        result = subprocess.check_output(['wc', '-l', self.file.name])
+        count, _ = result.split()
+        return int(count)
 
     def save_as(self, name):
         os.rename(self.file.name, os.path.join(data_dir, name))
@@ -92,7 +100,17 @@ def edges(logs):
         # There is honest-to-god unicode in here eg http://www.fileformat.info/info/unicode/char/2013/index.htm
         doi = log['doi'].encode('utf8')
         user = log['si'].encode('utf8')
-        yield doi, user
+        yield user, doi
+
+@util.logged
+def filter_bots(edges):
+    for user, rows in grouped(uniq_sorted(edges)):
+        dois = [row[1] for row in rows]
+        if len(dois) < max_downloads_per_user: # TODO percentage of total downloads?
+            for doi in dois:
+                yield doi, user
+        else:
+            print user, len(dois)
 
 @util.logged
 def doi_rows(edges):
@@ -127,7 +145,8 @@ def scores(min_hashes):
 
 @util.logged
 def recommendations(logs, iterations=1, top_n=5):
-    doi_rows_stash = stashed(doi_rows(edges(logs)))
+    edges_stash = stashed(filter_bots(edges(logs)))
+    doi_rows_stash = stashed(doi_rows(edges_stash))
     scores_iter = (scores(min_hashes(doi_rows_stash)) for _ in xrange(0, iterations))
     scores_stash = stashed(itertools.chain.from_iterable(scores_iter))
     for doi1, group in grouped(reverse_uniq_sorted(scores_stash)):
