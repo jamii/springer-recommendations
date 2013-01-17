@@ -79,7 +79,7 @@ def uniq_sorted(rows):
     """Return rows sorted by ujson order, with duplicate rows removed"""
     in_stash = stashed(rows)
     out_stash = Stash()
-    subprocess.check_call(['sort', '-u', in_stash.name, '-o', out_stash.name])
+    subprocess.check_call(['sort', '-T', data_dir, '-u', in_stash.name, '-o', out_stash.name])
     return out_stash
 
 @util.logged
@@ -87,7 +87,7 @@ def reverse_uniq_sorted(rows):
     """Return rows sorted by ujson order, with duplicate rows removed"""
     in_stash = stashed(rows)
     out_stash = Stash()
-    subprocess.check_call(['sort', '-u', '-r', in_stash.name, '-o', out_stash.name])
+    subprocess.check_call(['sort', '-T', data_dir, '-u', '-r', in_stash.name, '-o', out_stash.name])
     return out_stash
 
 def grouped(rows):
