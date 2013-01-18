@@ -3,7 +3,7 @@ from datetime import datetime
 import functools
 
 def log(name, event):
-    print datetime.now(), name, event
+    print datetime.now(), name, '-', event
     sys.stdout.flush()
 
 class Timed:

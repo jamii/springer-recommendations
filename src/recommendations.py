@@ -99,12 +99,14 @@ def unnumbered(rows, labels):
 
 @util.timed
 def preprocess(logs):
+    util.log('preprocess', 'reading input')
     raw_edges = sorted_stash((log['doi'].encode('utf8'), log['si'].encode('utf8')) for log in logs)
+
+    util.log('preprocess', 'collating')
     raw_dois = sorted_stash((doi for doi, user in raw_edges))
     raw_users = sorted_stash((user for doi, user in raw_edges))
 
-    # num_dois, num_users = len(raw_dois), len(raw_users)
-
+    util.log('preprocess', 'labelling')
     edges = raw_edges
     edges = sorted_stash(((user, doi) for doi, user in numbered(edges, raw_dois)))
     edges = sorted_stash(((doi, user) for user, doi in numbered(edges, raw_users)))
@@ -147,9 +149,13 @@ def recommendations(edges, num_dois, num_rounds=1, num_recs=5):
                 doi2dois[i], rec = rec, doi2dois[i]
 
     for round in xrange(0, num_rounds):
+        util.log('recommendations', 'beginning minhash round %i' % round)
         seed = random.getrandbits(64)
+        util.log('recommendations', 'hashing into buckets')
         buckets = [(minhash(seed, users), doi, users) for doi, users in enumerate(doi2users)]
+        util.log('recommendations', 'sorting buckets')
         buckets.sort()
+        util.log('recommendations', 'checking scores')
         for _, bucket in grouped(buckets):
             for (_, doi1, users1), (_, doi2, users2) in itertools.combinations(bucket, 2):
                 score = jackard_similarity(users1, users2)
