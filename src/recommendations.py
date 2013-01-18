@@ -114,7 +114,7 @@ def preprocess(logs):
     return raw_dois, raw_users, edges
 
 def minhash(seed, users):
-    return min((hash((seed, user)) for user in users))
+    return min((hash((user, seed)) for user in users))
 
 def jackard_similarity(users1, users2):
     intersection = 0
