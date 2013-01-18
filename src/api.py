@@ -1,19 +1,30 @@
+import os
 import flask
 import urllib
+import ujson
+import plyvel
 
-import db
+import preprocess
 
 app = flask.Flask('Springer Recommendations')
 
-scores = db.SingleValue('live', 'scores')
+recs_db = plyvel.DB(os.path.join(preprocess.data_dir, 'recs_db'), create_if_missing=True)
+
+def load_recs(filename):
+    for line in open(filename, 'r'):
+        doi, recs = ujson.loads(line)
+        recs_db.put(doi.encode('utf8'), ujson.dumps(recs))
 
 @app.route('/recommendations/<path:doi>')
 def recommendations(doi):
     print "Got: ", doi
     try:
-        return flask.jsonify(recommendations=scores.get(doi))
-    except KeyError:
-        return flask.jsonify(recommendations=[])
+        print ujson.loads(recs_db.get(doi.encode('utf8')))
+        recs = ujson.loads(recs_db.get(doi.encode('utf8')))
+    except:
+        recs = []
+    return flask.jsonify(recommendations=recs)
 
 if __name__ == '__main__':
+    # load_recs(os.path.join(preprocess.data_dir, 'recs'))
     app.run(port=8000)
