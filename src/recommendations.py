@@ -6,8 +6,8 @@ import subprocess
 import tempfile
 import itertools
 import random
-import heapq
 import operator
+from array import array
 
 import bson
 import ujson
@@ -114,22 +114,50 @@ def preprocess(logs):
 def minhash(seed, users):
     return min((hash((seed, user)) for user in users))
 
-@util.timed
-def recommendations(edges, num_iters=1, num_recs=5):
-    doi2users = [(doi, set((user for _, user in group))) for doi, group in grouped(edges)]
-    doi2recs = [[(0,None)] * num_recs for doi, _ in grouped(edges)]
+def jackard_similarity(users1, users2):
+    intersection = 0
+    difference = 0
+    i = 0
+    j = 0
+    while (i < len(users1)) and (j < len(users2)):
+        if users1[i] < users2[j]:
+            difference += 1
+            i += 1
+        elif users1[i] > users2[j]:
+            difference += 1
+            j += 1
+        else:
+            intersection += 1
+            i += 1
+            j += 1
+    difference += (len(users1) - i) + (len(users2) - j)
+    return float(intersection) / (float(intersection) + float(difference))
 
-    for _ in xrange(0, num_iters):
+@util.timed
+def recommendations(edges, num_dois, num_rounds=1, num_recs=5):
+    doi2users = [array('I', sorted(((user for _, user in group)))) for doi, group in grouped(edges)]
+
+    doi2scores = array('f', itertools.repeat(0.0, num_dois * num_recs))
+    doi2dois = array('i', itertools.repeat(-1, num_dois * num_recs))
+
+    def insert_rec(doi, score, rec):
+        for i in xrange(doi * num_recs, (doi + 1) * num_recs):
+            if score > doi2scores[i]:
+                doi2scores[i], score = score, doi2scores[i]
+                doi2dois[i], rec = rec, doi2dois[i]
+
+    for round in xrange(0, num_rounds):
         seed = random.getrandbits(64)
-        buckets = [(minhash(seed, users), doi, users) for doi, users in doi2users]
+        buckets = [(minhash(seed, users), doi, users) for doi, users in enumerate(doi2users)]
         buckets.sort()
         for _, bucket in grouped(buckets):
             for (_, doi1, users1), (_, doi2, users2) in itertools.combinations(bucket, 2):
-                score = float(len(users1.intersection(users2))) / float(len(users1.union(users2)))
-                heapq.heappushpop(doi2recs[doi1], (score, doi2))
-                heapq.heappushpop(doi2recs[doi2], (score, doi1))
+                score = jackard_similarity(users1, users2)
+                insert_rec(doi1, score, doi2)
+                insert_rec(doi2, score, doi1)
 
-    return doi2recs
+
+    return doi2scores, doi2recs
 
 @util.timed
 def postprocess(raw_users, raw_dois, doi2recs):
@@ -139,9 +167,10 @@ def main():
     logs = itertools.islice(from_dump('/mnt/var/Mongo3-backup/LogsRaw-20130113.bson'), 1000000)
     raw_users, raw_dois, edges = preprocess(logs)
     edges.rename('edges')
-    doi2recs = recommendations(edges)
-    raw_doi2recs = postprocess(raw_users, raw_dois, doi2recs)
-    raw_doi2recs.rename('recs')
+    num_dois = len(raw_dois)
+    recs = recommendations(edges, len(raw_dois))
+    raw_recs = postprocess(raw_users, raw_dois, recs)
+    raw_recs.rename('raw_recs')
 
 if __name__ == '__main__':
     # import cProfile
