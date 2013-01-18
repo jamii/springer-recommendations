@@ -69,7 +69,7 @@ class stash():
 def sorted_stash(rows):
     in_stash = stash(rows)
     out_stash = stash()
-    subprocess.check_call(['sort', '-T', data_dir, '-u', in_stash.name, '-o', out_stash.name])
+    subprocess.check_call(['sort', '-T', data_dir, '-S', '80%', '-u', in_stash.name, '-o', out_stash.name])
     return out_stash
 
 def grouped(rows):
