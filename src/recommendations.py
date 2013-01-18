@@ -1,87 +1,162 @@
-"""
-Recomendations using item-item cosine similarity. The naive algorithm is very straight forward:
+"""Preprocess download logs dumped from mongodb"""
 
-def recommendations(doi_a, downloads, limit):
-  scores = []
-  for doi_b in dois:
-    users_a = set((download['user'] for download in downloads if download['doi'] == doi_a))
-    users_b = set((download['user'] for download in downloads if download['doi'] == doi_b))
-    score = len(intersect(users_a, users_b)) / len(users_a) / len(users_b)
-    scores.append((score, doi_b))
-  return sorted(scores)[:limit]
-
-Unfortunately this does not scale so well when we have 5 million dois and 1 billion downloads.
-"""
-
-import json
+import os
+import struct
+import subprocess
+import tempfile
+import itertools
+import random
 import heapq
-import collections
 import operator
-import array
 
-import db
+import bson
+import ujson
+
 import util
-import settings
 
-id_struct = db.id_struct
+data_dir = "/mnt/var/springer-recommendations/"
 
-def collate_downloads(build_name):
-    downloads = db.SingleValue(build_name, 'downloads')
-    user_ids = db.Ids(build_name, 'user')
-    doi_ids = db.Ids(build_name, 'doi')
-    user2dois = db.MultiValue(build_name, 'user2dois')
-    doi2users = db.MultiValue(build_name, 'doi2users')
+max_downloads_per_user = 1000
 
-    for _, download in util.notifying_iter(downloads, 'recommendations.collate_downloads'):
-        user = id_struct.pack(user_ids.get_id(download.get('si', None) or download['ip']))
-        doi = id_struct.pack(doi_ids.get_id(download['doi']))
-        user2dois.put(user, doi)
-        doi2users.put(doi, user)
+unpack_prefix = struct.Struct('i').unpack
 
-    return (user_ids.next_id, doi_ids.next_id)
+# TODO: might be worth manually decoding the bson here and just picking out si/doi. could also avoid the utf8 encode later.
+@util.logged
+def from_dump(dump_filename):
+    """Read a mongodb dump containing bson-encoded download logs"""
+    dump_file = open(dump_filename, 'rb')
 
-def calculate_scores(num_users, num_dois, build_name, limit=5):
-    scores = db.SingleValue(build_name, 'scores')
-    user2dois = [None] * num_users
-    doi2users = [None] * num_dois
-
-    for doi, users in util.notifying_iter(db.MultiValue(build_name, 'doi2users'), "recommendations.calculate_scores(doi2users)"):
-        doi = id_struct.unpack(doi)[0]
-        doi2users[doi] = array.array('I', (id_struct.unpack(user)[0] for user in users))
-
-    for user, dois in util.notifying_iter(db.MultiValue(build_name, 'user2dois'), "recommendations.calculate_scores(user2dois)"):
-        user = id_struct.unpack(user)[0]
-        if len(dois) < settings.max_downloads_per_user:  # drop the ~0.1% of users that cause most of the work
-            user2dois[user] = array.array('I', (id_struct.unpack(doi)[0] for doi in dois))
+    while True:
+        prefix = dump_file.read(4)
+        if len(prefix) == 0:
+            break
+        elif len(prefix) != 4:
+            raise IOError('Prefix is too short: %s' % prefix)
         else:
-            user2dois[user] = array.array('I')
+            size, = unpack_prefix(prefix)
+            data = prefix + dump_file.read(size - 4)
+            download = bson.BSON(data).decode()
+            if download.get('si', '') and download.get('doi', ''):
+                yield download
 
-    user_ids = db.Ids(build_name, 'user')
-    doi_ids = db.Ids(build_name, 'doi')
+stashes = []
 
-    for doi_a, users_a in util.notifying_iter(enumerate(doi2users), "recommendations.calculate_scores(calculate)", interval=1000):
-        doi2users_common = collections.Counter()
+class Stash():
+    """Read-only on-disk cache of a list of rows"""
+    def __init__(self):
+        self.file = tempfile.NamedTemporaryFile(dir=data_dir)
+        self.name = self.file.name
+        stashes.append(self)
+        util.log('stash', self.name)
 
-        for user in users_a:
-            for doi in user2dois[user]:
-                doi2users_common[doi] += 1
+    @util.logged
+    def __iter__(self):
+        self.file.seek(0) # always iterate from the start
+        return itertools.imap(ujson.loads, self.file)
 
-        def scores_a():
-            for doi_b, users_common in doi2users_common.iteritems():
-                if doi_b != doi_a:
-                    users_b = doi2users[doi_b]
-                    score = (users_common ** 2.0) / len(users_a) / len(users_b)
-                    yield (score, doi_b)
+    @util.logged
+    def __len__(self):
+        result = subprocess.check_output(['wc', '-l', self.file.name])
+        count, _ = result.split()
+        return int(count)
 
-        top_scores = heapq.nlargest(limit, scores_a(), key=operator.itemgetter(0))
-        scores.put(doi_ids.get_string(doi_a), [(score, doi_ids.get_string(doi_b)) for score, doi_b in top_scores])
+    def save_as(self, name):
+        os.rename(self.file.name, os.path.join(data_dir, name))
 
-def build(build_name, limit=5):
-    (num_users, num_dois) = collate_downloads(build_name)
-    calculate_scores(num_users, num_dois, build_name)
+@util.logged
+def stashed(rows):
+    """Store a list of string rows in a temporary file. Assumes row entries never contain \x00 or \n."""
+    if isinstance(rows, Stash):
+        return rows
+    else:
+        stash = Stash()
+        stash.file.writelines(("%s\n" % ujson.dumps(row) for row in rows))
+        stash.file.flush()
+        return stash
 
-# for easy profiling
+@util.logged
+def uniq_sorted(rows):
+    """Return rows sorted by ujson order, with duplicate rows removed"""
+    in_stash = stashed(rows)
+    out_stash = Stash()
+    subprocess.check_call(['sort', '-T', data_dir, '-u', in_stash.name, '-o', out_stash.name])
+    return out_stash
+
+@util.logged
+def reverse_uniq_sorted(rows):
+    """Return rows sorted by ujson order, with duplicate rows removed"""
+    in_stash = stashed(rows)
+    out_stash = Stash()
+    subprocess.check_call(['sort', '-T', data_dir, '-u', '-r', in_stash.name, '-o', out_stash.name])
+    return out_stash
+
+def grouped(rows):
+    """Return rows grouped by first column"""
+    return itertools.groupby(rows, lambda r: r[0])
+
+@util.logged
+def edges(logs):
+    for log in logs:
+        # There is honest-to-god unicode in here eg http://www.fileformat.info/info/unicode/char/2013/index.htm
+        doi = log['doi'].encode('utf8')
+        user = log['si'].encode('utf8')
+        yield user, doi
+
+@util.logged
+def filter_bots(edges):
+    for user, rows in grouped(uniq_sorted(edges)):
+        dois = [row[1] for row in rows]
+        if len(dois) < max_downloads_per_user: # TODO percentage of total downloads?
+            for doi in dois:
+                yield doi, user
+        else:
+            print user, len(dois)
+
+@util.logged
+def doi_rows(edges):
+    for doi, rows in grouped(uniq_sorted(edges)):
+        users = [row[1] for row in rows]
+        yield doi, users
+
+@util.logged
+def min_hashes(doi_rows):
+    """Minhash approximation as described by Das, Abhinandan S., et al. "Google news personalization: scalable online collaborative filtering." Proceedings of the 16th international conference on World Wide Web. ACM, 2007. """
+    seed = random.getrandbits(64)
+    for doi, users in doi_rows:
+        hashes = [hash((seed, user)) for user in users]
+        yield min(hashes), doi, users
+
+def pairs(xs):
+    for i, x1 in enumerate(xs):
+        for x2 in xs[(i+1):]:
+            yield x1, x2
+
+def jaccard_similarity(users1, users2):
+    return float(len(users1.intersection(users2))) / float(len(users1.union(users2)))
+
+@util.logged
+def scores(min_hashes):
+    for min_hash, group in grouped(uniq_sorted(min_hashes)):
+        bucket = [(doi, set(users)) for (_, doi, users) in group]
+        for (doi1, users1), (doi2, users2) in pairs(bucket):
+            score = jaccard_similarity(users1, users2)
+            yield doi1, score, doi2
+            yield doi2, score, doi1
+
+@util.logged
+def recommendations(logs, iterations=1, top_n=5):
+    edges_stash = stashed(filter_bots(edges(logs)))
+    doi_rows_stash = stashed(doi_rows(edges_stash))
+    scores_iter = (scores(min_hashes(doi_rows_stash)) for _ in xrange(0, iterations))
+    scores_stash = stashed(itertools.chain.from_iterable(scores_iter))
+    for doi1, group in grouped(reverse_uniq_sorted(scores_stash)):
+        top_scores = [(doi2, score) for (_, score, doi2) in itertools.islice(group, top_n)]
+        yield doi1, top_scores
+
 if __name__ == '__main__':
-    (num_users, num_dois) = collate_downloads(build_name='test')
-    print 'Nums', num_users, num_dois
-    calculate_scores(num_users, num_dois, build_name='test')
+    try:
+        logs = itertools.islice(from_dump('/mnt/var/Mongo3-backup/LogsRaw-20130113.bson'), 1000000)
+        recs = recommendations(logs)
+        stashed(recs).save_as('recs')
+    finally:
+        raw_input("Die?")
