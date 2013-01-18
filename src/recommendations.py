@@ -162,16 +162,22 @@ def recommendations(edges, num_dois, num_rounds=1, num_recs=5):
                 insert_rec(doi1, score, doi2)
                 insert_rec(doi2, score, doi1)
 
+    recs = ((doi, doi2scores[(doi*num_recs)+rec], doi2dois[(doi*num_recs)+rec]) for rec in xrange(0, num_recs) for doi in xrange(0, num_dois))
 
-    return doi2scores, doi2recs
+    return recs
 
 @util.timed
-def postprocess(raw_users, raw_dois, doi2recs):
-    return stash(doi2recs)
+def postprocess(raw_users, raw_dois, recs):
+    recs = sorted_stash(((rec, score, doi) for (doi, score, rec) in unnumbered(recs, raw_dois)))
+    recs = sorted_stash(((doi, score, rec) for (rec, score, doi) in unnumbered(recs, raw_dois)))
+    return stash(((doi, [(rec, score) for (_, rec, score) in group]) for doi, group in group(recs)))
 
 def main():
-    logs = itertools.islice(from_dump('/mnt/var/Mongo3-backup/LogsRaw-20130113.bson'), 1000000)
-    raw_users, raw_dois, edges = preprocess(logs)
+    logs = itertools.islice(from_dump('/mnt/var/Mongo3-backup/LogsRaw-20130113.bson'), 1000)
+    # logs = itertools.chain(from_dump('/mnt/var/Mongo3-backup/LogsRaw-20130113.bson'), from_dump('/mnt/var/Mongo3-backup/LogsRaw.bson'))
+    raw_dois, raw_users, edges = preprocess(logs)
+    raw_dois.rename('raw_dois')
+    raw_users.rename('raw_users')
     edges.rename('edges')
     num_dois = len(raw_dois)
     recs = recommendations(edges, len(raw_dois))
