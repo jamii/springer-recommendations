@@ -158,7 +158,9 @@ def recommendations(edges, num_dois, num_rounds=20, num_recs=5):
         buckets.sort()
         util.log('recommendations', 'checking scores')
         for _, bucket in grouped(buckets):
-            for (_, doi1, users1), (_, doi2, users2) in itertools.combinations(bucket, 2):
+            bucket = list(bucket)
+            random.shuffle(bucket)
+            for (_, doi1, users1), (_, doi2, users2) in itertools.izip(bucket, bucket[1:]):
                 score = jackard_similarity(users1, users2)
                 insert_rec(doi1, score, doi2)
                 insert_rec(doi2, score, doi1)
