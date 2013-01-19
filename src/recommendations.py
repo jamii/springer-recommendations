@@ -135,17 +135,19 @@ def jackard_similarity(users1, users2):
     return float(intersection) / (float(intersection) + float(difference))
 
 @util.timed
-def recommendations(edges, num_dois, num_rounds=1, num_recs=5):
+def recommendations(edges, num_dois, num_rounds=20, num_recs=5):
     doi2users = [array('I', sorted(((user for _, user in group)))) for doi, group in grouped(edges)]
 
     doi2scores = array('f', itertools.repeat(0.0, num_dois * num_recs))
-    doi2dois = array('i', itertools.repeat(-1, num_dois * num_recs))
+    doi2recs = array('i', itertools.repeat(-1, num_dois * num_recs))
 
     def insert_rec(doi, score, rec):
         for i in xrange(doi * num_recs, (doi + 1) * num_recs):
-            if score > doi2scores[i]:
+            if doi2recs[i] == rec:
+                break
+            elif score > doi2scores[i]:
                 doi2scores[i], score = score, doi2scores[i]
-                doi2dois[i], rec = rec, doi2dois[i]
+                doi2recs[i], rec = rec, doi2recs[i]
 
     for round in xrange(0, num_rounds):
         util.log('recommendations', 'beginning minhash round %i' % round)
