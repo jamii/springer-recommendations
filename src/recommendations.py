@@ -185,15 +185,15 @@ def postprocess(raw_dois, recs):
     return stash(((doi, [(score, rec) for (_, score, rec) in group]) for doi, group in grouped(recs)))
 
 def main():
-    logs = itertools.islice(from_dump('/mnt/var/Mongo3-backup/LogsRaw-20130113.bson'), 1000)
-    # logs = itertools.chain(from_dump('/mnt/var/Mongo3-backup/LogsRaw-20130113.bson'), from_dump('/mnt/var/Mongo3-backup/LogsRaw.bson'))
+    # logs = itertools.islice(from_dump('/mnt/var/Mongo3-backup/LogsRaw-20130113.bson'), 1000)
+    logs = itertools.chain(from_dump('/mnt/var/Mongo3-backup/LogsRaw-20130113.bson'), from_dump('/mnt/var/Mongo3-backup/LogsRaw.bson'))
     raw_dois, raw_users, edges = preprocess(logs)
     raw_dois.rename('raw_dois')
     raw_users.rename('raw_users')
     edges.rename('edges')
     num_dois = len(raw_dois)
     recs = recommendations(edges, len(raw_dois))
-    raw_recs = postprocess(raw_users, raw_dois, recs)
+    raw_recs = postprocess(raw_dois, recs)
     raw_recs.rename('raw_recs')
 
 if __name__ == '__main__':
