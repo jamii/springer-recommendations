@@ -165,7 +165,14 @@ def recommendations(edges, num_dois, num_rounds=20, num_recs=5):
                 insert_rec(doi1, score, doi2)
                 insert_rec(doi2, score, doi1)
 
-    recs = ((doi, doi2scores[(doi*num_recs)+rec], doi2dois[(doi*num_recs)+rec]) for rec in xrange(0, num_recs) for doi in xrange(0, num_dois))
+    recs = []
+    for doi in xrange(0, num_dois):
+        for rec in xrange(0, num_recs):
+            i = (doi*num_recs)+rec
+            score = doi2scores[i]
+            rec = doi2recs[i]
+            if score > 0 and rec >= 0:
+                recs.append([doi, score, rec])
 
     return recs
 
