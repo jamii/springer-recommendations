@@ -86,16 +86,15 @@ def numbered(rows, labels):
         row[0] = index
         yield row
 
-def unnumbered(rows, labels):
+def unnumber(rows, labels, column=0):
     labels = iter(labels)
     label = labels.next()
     index = 0
     for row in rows:
-        while index != row[0]:
+        while index != row[column]:
             label = labels.next()
             index += 1
-        row[0] = label
-        yield row
+        row[column] = label
 
 @util.timed
 def preprocess(logs):
@@ -167,10 +166,12 @@ def recommendations(edges, num_dois, num_rounds=1, num_recs=5):
     return recs
 
 @util.timed
-def postprocess(raw_users, raw_dois, recs):
-    recs = sorted_stash(((rec, score, doi) for (doi, score, rec) in unnumbered(recs, raw_dois)))
-    recs = sorted_stash(((doi, score, rec) for (rec, score, doi) in unnumbered(recs, raw_dois)))
-    return stash(((doi, [(rec, score) for (_, rec, score) in group]) for doi, group in group(recs)))
+def postprocess(raw_dois, recs):
+    recs.sort(key=operator.itemgetter(2))
+    unnumber(recs, raw_dois, column=2)
+    recs.sort(key=operator.itemgetter(0))
+    unnumber(recs, raw_dois, column=0)
+    return stash(((doi, [(score, rec) for (_, score, rec) in group]) for doi, group in grouped(recs)))
 
 def main():
     logs = itertools.islice(from_dump('/mnt/var/Mongo3-backup/LogsRaw-20130113.bson'), 1000)
