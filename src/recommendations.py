@@ -1,4 +1,4 @@
-"""Preprocess download logs dumped from mongodb"""
+"""Fast, scalable item-item recommendations based on Das, Abhinandan S., et al. "Google news personalization: scalable online collaborative filtering." Proceedings of the 16th international conference on World Wide Web. ACM, 2007."""
 
 import os
 import sys
@@ -19,9 +19,9 @@ import settings
 
 unpack_prefix = struct.Struct('i').unpack
 
-# TODO: might be worth manually decoding the bson here and just picking out si/doi. could also avoid the utf8 encode later.
 def from_dump(dump_filename):
     """Read a mongodb dump containing bson-encoded download logs"""
+    # TODO: might be worth manually decoding the bson here and just picking out si/doi. could also avoid the utf8 encode later.
     dump_file = open(dump_filename, 'rb')
 
     while True:
@@ -65,6 +65,7 @@ class stash():
         shutil.copy(self.file.name, os.path.join(settings.data_dir, name))
 
 def sorted_stash(rows):
+    """A sorted, de-duped stash"""
     if isinstance(rows, stash):
         in_stash = rows
     else:
@@ -74,9 +75,11 @@ def sorted_stash(rows):
     return out_stash
 
 def grouped(rows):
+    """Group rows by their first column"""
     return itertools.groupby(rows, operator.itemgetter(0))
 
 def numbered(rows, labels):
+    """For each row, replace the first column by its index in labels. Assumes both rows and labels are sorted. Returns a new iter."""
     labels = iter(labels)
     label = labels.next()
     index = 0
@@ -88,6 +91,7 @@ def numbered(rows, labels):
         yield row
 
 def unnumber(rows, labels, column=0):
+    """For each row, lookup column as an index in labels. Assumes both rows and labels are sorted. Modifies rows in place."""
     labels = iter(labels)
     label = labels.next()
     index = 0
@@ -99,6 +103,7 @@ def unnumber(rows, labels, column=0):
 
 @util.timed
 def preprocess(logs):
+    """Replace string DOIs and users by integer indices for more compact representation later"""
     util.log('preprocess', 'reading logs')
     raw_edges = stash(logs)
 
@@ -116,9 +121,11 @@ def preprocess(logs):
     return raw_dois, edges
 
 def minhash(seed, users):
+    """The minimum hash of a list of users. See http://en.wikipedia.org/wiki/MinHash"""
     return min((hash((user, seed)) for user in users))
 
-def jackard_similarity(users1, users2):
+def jaccard_similarity(users1, users2):
+    """Jaccard similarity between two sets represented as sorted arrays of integers. See http://en.wikipedia.org/wiki/Jaccard_index"""
     intersection = 0
     difference = 0
     i = 0
@@ -139,8 +146,10 @@ def jackard_similarity(users1, users2):
 
 @util.timed
 def recommendations(edges, num_dois):
+    """For each doi in edges, try to find the nearest settings.recommendations_per_doi DOIs by Jaccard similarity using minhashing"""
     doi2users = [array('I', sorted(((user for _, user in group)))) for doi, group in grouped(edges)]
 
+    # store top settings.recommmendations_per_doi recs for each doi in two huge arrays, to save on object overhead
     doi2scores = array('f', itertools.repeat(0.0, num_dois * settings.recommendations_per_doi))
     doi2recs = array('i', itertools.repeat(-1, num_dois * settings.recommendations_per_doi))
 
@@ -162,9 +171,9 @@ def recommendations(edges, num_dois):
         util.log('recommendations', 'checking scores')
         for _, bucket in grouped(buckets):
             bucket = list(bucket)
-            random.shuffle(bucket)
+            random.shuffle(bucket) # shuffle bucket because it's currently in doi order
             for (_, doi1, users1), (_, doi2, users2) in itertools.izip(bucket, bucket[1:]):
-                score = jackard_similarity(users1, users2)
+                score = jaccard_similarity(users1, users2)
                 insert_rec(doi1, score, doi2)
                 insert_rec(doi2, score, doi1)
 
@@ -181,6 +190,7 @@ def recommendations(edges, num_dois):
 
 @util.timed
 def postprocess(raw_dois, recs):
+    """Turn integer DOIs and users back into strings"""
     recs.sort(key=operator.itemgetter(2))
     unnumber(recs, raw_dois, column=2)
     recs.sort(key=operator.itemgetter(0))

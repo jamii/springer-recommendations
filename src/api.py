@@ -1,3 +1,5 @@
+"""Quick way to preview results"""
+
 import os
 import flask
 import urllib

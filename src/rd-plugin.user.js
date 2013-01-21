@@ -5,6 +5,8 @@
 // @include       http*://rd.springer.com/article/*
 // ==/UserScript==
 
+// This is just a quick hack for previewing results. Not well tested.
+
 $(
     function () {
         var api_key = null; // get your own :-P
