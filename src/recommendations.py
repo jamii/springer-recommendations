@@ -32,9 +32,11 @@ def from_dump(dump_filename):
         else:
             size, = unpack_prefix(prefix)
             data = prefix + dump_file.read(size - 4)
-            download = bson.BSON(data).decode()
-            if download.get('si', '') and download.get('doi', ''):
-                yield download
+            log = bson.BSON(data).decode()
+            user = log.get('si', '') or log.get('ip', '')
+            doi = log.get('doi', '')
+            if user and doi:
+                yield user.encode('utf8'), doi.encode('utf8')
 
 # have to keep an explicit reference to the stashes because many itertools constructs don't
 stashes = []
@@ -62,7 +64,10 @@ class stash():
         shutil.copy(self.file.name, os.path.join(settings.data_dir, name))
 
 def sorted_stash(rows):
-    in_stash = stash(rows)
+    if isinstance(rows, stash):
+        in_stash = rows
+    else:
+        in_stash = stash(rows)
     out_stash = stash()
     subprocess.check_call(['sort', '-T', settings.data_dir, '-S', '80%', '-u', in_stash.name, '-o', out_stash.name])
     return out_stash
@@ -93,17 +98,19 @@ def unnumber(rows, labels, column=0):
 
 @util.timed
 def preprocess(logs):
-    util.log('preprocess', 'reading input')
-    raw_edges = sorted_stash((log['doi'].encode('utf8'), log['si'].encode('utf8')) for log in logs)
+    util.log('preprocess', 'reading logs')
+    raw_edges = stash(logs)
 
     util.log('preprocess', 'collating')
-    raw_dois = sorted_stash((doi for doi, user in raw_edges))
-    raw_users = sorted_stash((user for doi, user in raw_edges))
+    raw_users = sorted_stash((user for user, doi in raw_edges))
+    raw_dois = sorted_stash((doi for user, doi in raw_edges))
 
     util.log('preprocess', 'labelling')
     edges = raw_edges
-    edges = sorted_stash(((user, doi) for doi, user in numbered(edges, raw_dois)))
-    edges = sorted_stash(((doi, user) for user, doi in numbered(edges, raw_users)))
+    edges = numbered(sorted_stash(edges), raw_users)
+    edges = ((doi, user) for user, doi in edges)
+    edges = numbered(sorted_stash(edges), raw_dois)
+    edges = stash(edges)
 
     return raw_dois, edges
 
