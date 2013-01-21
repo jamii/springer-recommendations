@@ -1,6 +1,7 @@
 """Preprocess download logs dumped from mongodb"""
 
 import os
+import sys
 import shutil
 import struct
 import subprocess
@@ -187,13 +188,14 @@ def postprocess(raw_dois, recs):
     return stash(((doi, [(score, rec) for (_, score, rec) in group]) for doi, group in grouped(recs)))
 
 def main():
-    # logs = itertools.islice(from_dump('/mnt/var/Mongo3-backup/LogsRaw-20130113.bson'), 1000)
-    logs = itertools.chain(from_dump('/mnt/var/Mongo3-backup/LogsRaw-20130113.bson'), from_dump('/mnt/var/Mongo3-backup/LogsRaw.bson'))
+    logs = itertools.chain.from_iterable((from_dump(dump_filename.rstrip()) for dump_filename in sys.stdin.readlines()))
+    # logs = itertools.islice(logs, 1000) # for quick testing
     raw_dois, edges = preprocess(logs)
     num_dois = len(raw_dois)
     recs = recommendations(edges, len(raw_dois))
     raw_recs = postprocess(raw_dois, recs)
-    raw_recs.save_as('raw_recs')
+    sys.stdout.writelines(("%s\n" % ujson.dumps(row) for row in raw_recs))
+    sys.stdout.flush()
 
 if __name__ == '__main__':
     # import cProfile
