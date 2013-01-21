@@ -14,10 +14,7 @@ import bson
 import ujson
 
 import util
-
-data_dir = "/mnt/var/springer-recommendations/"
-
-max_downloads_per_user = 1000
+import settings
 
 unpack_prefix = struct.Struct('i').unpack
 
@@ -46,7 +43,7 @@ class stash():
     """On-disk cache of a list of rows"""
     def __init__(self, rows=[]):
         stashes.append(self)
-        self.file = tempfile.NamedTemporaryFile(dir=data_dir)
+        self.file = tempfile.NamedTemporaryFile(dir=settings.data_dir)
         self.name = self.file.name
         dumps = ujson.dumps # don't want to do this lookup inside the loop below
         self.file.writelines(("%s\n" % dumps(row) for row in rows))
@@ -62,12 +59,12 @@ class stash():
         return int(count)
 
     def save_as(self, name):
-        shutil.copy(self.file.name, os.path.join(data_dir, name))
+        shutil.copy(self.file.name, os.path.join(settings.data_dir, name))
 
 def sorted_stash(rows):
     in_stash = stash(rows)
     out_stash = stash()
-    subprocess.check_call(['sort', '-T', data_dir, '-S', '80%', '-u', in_stash.name, '-o', out_stash.name])
+    subprocess.check_call(['sort', '-T', settings.data_dir, '-S', '80%', '-u', in_stash.name, '-o', out_stash.name])
     return out_stash
 
 def grouped(rows):
@@ -133,21 +130,21 @@ def jackard_similarity(users1, users2):
     return float(intersection) / (float(intersection) + float(difference))
 
 @util.timed
-def recommendations(edges, num_dois, num_rounds=20, num_recs=5):
+def recommendations(edges, num_dois):
     doi2users = [array('I', sorted(((user for _, user in group)))) for doi, group in grouped(edges)]
 
-    doi2scores = array('f', itertools.repeat(0.0, num_dois * num_recs))
-    doi2recs = array('i', itertools.repeat(-1, num_dois * num_recs))
+    doi2scores = array('f', itertools.repeat(0.0, num_dois * settings.recommendations_per_doi))
+    doi2recs = array('i', itertools.repeat(-1, num_dois * settings.recommendations_per_doi))
 
     def insert_rec(doi, score, rec):
-        for i in xrange(doi * num_recs, (doi + 1) * num_recs):
+        for i in xrange(doi * settings.recommendations_per_doi, (doi + 1) * settings.recommendations_per_doi):
             if doi2recs[i] == rec:
                 break
             elif score > doi2scores[i]:
                 doi2scores[i], score = score, doi2scores[i]
                 doi2recs[i], rec = rec, doi2recs[i]
 
-    for round in xrange(0, num_rounds):
+    for round in xrange(0, settings.minhash_rounds):
         util.log('recommendations', 'beginning minhash round %i' % round)
         seed = random.getrandbits(64)
         util.log('recommendations', 'hashing into buckets')
@@ -165,8 +162,8 @@ def recommendations(edges, num_dois, num_rounds=20, num_recs=5):
 
     recs = []
     for doi in xrange(0, num_dois):
-        for rec in xrange(0, num_recs):
-            i = (doi*num_recs)+rec
+        for rec in xrange(0, settings.recommendations_per_doi):
+            i = (doi*settings.recommendations_per_doi)+rec
             score = doi2scores[i]
             rec = doi2recs[i]
             if score > 0 and rec >= 0:
