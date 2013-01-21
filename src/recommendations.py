@@ -108,7 +108,7 @@ def preprocess(logs):
     edges = sorted_stash(((user, doi) for doi, user in numbered(edges, raw_dois)))
     edges = sorted_stash(((doi, user) for user, doi in numbered(edges, raw_users)))
 
-    return raw_dois, raw_users, edges
+    return raw_dois, edges
 
 def minhash(seed, users):
     return min((hash((user, seed)) for user in users))
@@ -185,7 +185,7 @@ def postprocess(raw_dois, recs):
 def main():
     # logs = itertools.islice(from_dump('/mnt/var/Mongo3-backup/LogsRaw-20130113.bson'), 1000)
     logs = itertools.chain(from_dump('/mnt/var/Mongo3-backup/LogsRaw-20130113.bson'), from_dump('/mnt/var/Mongo3-backup/LogsRaw.bson'))
-    raw_dois, raw_users, edges = preprocess(logs)
+    raw_dois, edges = preprocess(logs)
     num_dois = len(raw_dois)
     recs = recommendations(edges, len(raw_dois))
     raw_recs = postprocess(raw_dois, recs)
