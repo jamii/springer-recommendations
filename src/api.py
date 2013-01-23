@@ -6,11 +6,11 @@ import urllib
 import ujson
 import plyvel
 
-import recommendations
+import settings
 
 app = flask.Flask('Springer Recommendations')
 
-recs_db = plyvel.DB(os.path.join(recommendations.data_dir, 'recs_db'), create_if_missing=True)
+recs_db = plyvel.DB(os.path.join(settings.data_dir, 'recs_db'), create_if_missing=True)
 
 def load_recs(filename):
     for line in open(filename, 'r'):
@@ -28,5 +28,5 @@ def get_recommendations(doi):
     return flask.jsonify(recommendations=recs)
 
 if __name__ == '__main__':
-    # load_recs(os.path.join(recommendations.data_dir, 'raw_recs'))
+    load_recs(os.path.join(settings.data_dir, 'raw_recs'))
     app.run(port=8000)
