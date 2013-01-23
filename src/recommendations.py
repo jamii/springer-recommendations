@@ -201,7 +201,7 @@ def main():
     logs = itertools.chain.from_iterable((from_dump(dump_filename.rstrip()) for dump_filename in sys.stdin.readlines()))
     # logs = itertools.islice(logs, 1000) # for quick testing
     raw_dois, edges = preprocess(logs)
-    num_dois = len(raw_dois)
+    util.log('main', '%i unique edges' % len(edges))
     recs = recommendations(edges, len(raw_dois))
     raw_recs = postprocess(raw_dois, recs)
     sys.stdout.writelines(("%s\n" % ujson.dumps(row) for row in raw_recs))
