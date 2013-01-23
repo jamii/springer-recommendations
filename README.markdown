@@ -27,7 +27,7 @@ The recommendations engine reads in a list of filenames pointing to dumps from t
 Example usage:
 
 ``` bash
-find /mnt/var/Mongo3-backup/*.bson | python springer-recommendations/src/recommendations.py > recommendations.json
+find /mnt/var/Mongo3-backup/*.bson | nohup python springer-recommendations/src/recommendations.py > recommendations.json 2> recommendations.log &
 ```
 
 For each DOI in the logs, the recommendations contain a row of recommended DOIs and their Jaccard similarity to the first DOI.
