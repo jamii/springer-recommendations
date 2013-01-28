@@ -3,7 +3,6 @@
 import os
 import sys
 import shutil
-import struct
 import subprocess
 import tempfile
 import itertools
@@ -11,33 +10,10 @@ import random
 import operator
 from array import array
 
-import bson
 import ujson
 
 import util
 import settings
-
-unpack_prefix = struct.Struct('i').unpack
-
-def from_dump(dump_filename):
-    """Read a mongodb dump containing bson-encoded download logs"""
-    # TODO: might be worth manually decoding the bson here and just picking out si/doi. could also avoid the utf8 encode later.
-    dump_file = open(dump_filename, 'rb')
-
-    while True:
-        prefix = dump_file.read(4)
-        if len(prefix) == 0:
-            break
-        elif len(prefix) != 4:
-            raise IOError('Prefix is too short: %s' % prefix)
-        else:
-            size, = unpack_prefix(prefix)
-            data = prefix + dump_file.read(size - 4)
-            log = bson.BSON(data).decode()
-            user = log.get('si', '') or log.get('ip', '')
-            doi = log.get('doi', '')
-            if user and doi:
-                yield user.encode('utf8'), doi.encode('utf8')
 
 # have to keep an explicit reference to the stashes because many itertools constructs don't
 stashes = []
@@ -52,6 +28,23 @@ class stash():
         self.file.writelines(("%s\n" % dumps(row) for row in rows))
         self.file.flush()
 
+    @staticmethod
+    def sorted(rows):
+        """A sorted, de-duped stash"""
+        if isinstance(rows, stash):
+            in_stash = rows
+        else:
+            in_stash = stash(rows)
+        out_stash = stash()
+        subprocess.check_call(['sort', '-T', settings.data_dir, '-S', '80%', '-u', in_stash.name, '-o', out_stash.name])
+        return out_stash
+
+    @staticmethod
+    def from_file(file):
+        out_stash = stash()
+        out_stash.file = file
+        return out_stash
+
     def __iter__(self):
         self.file.seek(0) # always iterate from the start
         return itertools.imap(ujson.loads, self.file)
@@ -63,16 +56,6 @@ class stash():
 
     def save_as(self, name):
         shutil.copy(self.file.name, os.path.join(settings.data_dir, name))
-
-def sorted_stash(rows):
-    """A sorted, de-duped stash"""
-    if isinstance(rows, stash):
-        in_stash = rows
-    else:
-        in_stash = stash(rows)
-    out_stash = stash()
-    subprocess.check_call(['sort', '-T', settings.data_dir, '-S', '80%', '-u', in_stash.name, '-o', out_stash.name])
-    return out_stash
 
 def grouped(rows):
     """Group rows by their first column"""
@@ -102,27 +85,27 @@ def unnumber(rows, labels, column=0):
         row[column] = label
 
 @util.timed
-def preprocess(logs):
+def preprocess(raw_edges):
     """Replace string DOIs and users by integer indices for more compact representation later"""
-    util.log('preprocess', 'reading logs')
-    raw_edges = stash(logs)
+    util.log('preprocess', 'copying input')
+    raw_edges = stash(raw_edges)
 
     util.log('preprocess', 'collating')
-    raw_users = sorted_stash((user for user, doi in raw_edges))
-    raw_dois = sorted_stash((doi for user, doi in raw_edges))
+    raw_users = stash.sorted((user for user, doi in raw_edges))
+    raw_dois = stash.sorted((doi for user, doi in raw_edges))
 
     util.log('preprocess', 'labelling')
     edges = raw_edges
-    edges = numbered(sorted_stash(edges), raw_users)
+    edges = numbered(stash.sorted(edges), raw_users)
     edges = ((doi, user) for user, doi in edges)
-    edges = numbered(sorted_stash(edges), raw_dois)
+    edges = numbered(stash.sorted(edges), raw_dois)
     edges = stash(edges)
 
     return raw_dois, edges
 
 def minhash(seed, users):
     """The minimum hash of a list of users. See http://en.wikipedia.org/wiki/MinHash"""
-    return min((hash((user, seed)) for user in users))
+    return min((hash((seed, user, seed)) for user in users))
 
 def jaccard_similarity(users1, users2):
     """Jaccard similarity between two sets represented as sorted arrays of integers. See http://en.wikipedia.org/wiki/Jaccard_index"""
@@ -198,9 +181,9 @@ def postprocess(raw_dois, recs):
     return stash(((doi, [(score, rec) for (_, score, rec) in group]) for doi, group in grouped(recs)))
 
 def main():
-    logs = itertools.chain.from_iterable((from_dump(dump_filename.rstrip()) for dump_filename in sys.stdin.readlines()))
-    # logs = itertools.islice(logs, 1000) # for quick testing
-    raw_dois, edges = preprocess(logs)
+    raw_edges = itertools.chain.from_iterable((stash.from_file(open(dump_filename.rstrip())) for dump_filename in sys.stdin.readlines()))
+    # raw_edges = itertools.islice(raw_edges, 1000) # for quick testing
+    raw_dois, edges = preprocess(raw_edges)
     util.log('main', '%i unique edges' % len(edges))
     recs = recommendations(edges, len(raw_dois))
     raw_recs = postprocess(raw_dois, recs)
