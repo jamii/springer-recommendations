@@ -103,10 +103,6 @@ def preprocess(raw_edges):
 
     return raw_dois, edges
 
-def minhash(seed, users):
-    """The minimum hash of a list of users. See http://en.wikipedia.org/wiki/MinHash"""
-    return min((hash((seed, user, seed)) for user in users))
-
 def jaccard_similarity(users1, users2):
     """Jaccard similarity between two sets represented as sorted arrays of integers. See http://en.wikipedia.org/wiki/Jaccard_index"""
     intersection = 0
@@ -128,15 +124,32 @@ def jaccard_similarity(users1, users2):
     return float(intersection) / (float(intersection) + float(difference))
 
 @util.timed
+def minhash_round(buckets):
+    """Probabalistic algorithm for finding edges with high jaccard scores (see http://en.wikipedia.org/wiki/MinHash). Modifies buckets in-place."""
+    seed = random.getrandbits(64)
+    util.log('minhash_round', 'hashing into buckets')
+    for bucket in buckets:
+        users = bucket[3]
+        bucket[0] = min((hash((seed, user, seed)) for user in users)) # minhash
+        bucket[1] = random.random() # prevents bias towards adjacent dois caused by sorting
+    util.log('minhash_round', 'sorting buckets')
+    buckets.sort()
+    util.log('minhash_round', 'checking scores')
+    for (_, _, doi1, users1), (_, _, doi2, users2) in itertools.izip(buckets, buckets[1:]):
+        score = jaccard_similarity(users1, users2)
+        yield doi1, doi2, score
+
+@util.timed
 def recommendations(edges, num_dois):
     """For each doi in edges, try to find the nearest settings.recommendations_per_doi DOIs by Jaccard similarity using minhashing"""
-    doi2users = [array('I', sorted(((user for _, user in group)))) for doi, group in grouped(edges)]
+    # list of (minhash, random, user, doi)
+    buckets = [[0, 0, doi, array('I', sorted(((user for _, user in group))))] for doi, group in grouped(edges)]
 
     # store top settings.recommmendations_per_doi recs for each doi in two huge arrays, to save on object overhead
     doi2scores = array('f', itertools.repeat(0.0, num_dois * settings.recommendations_per_doi))
     doi2recs = array('i', itertools.repeat(-1, num_dois * settings.recommendations_per_doi))
 
-    def insert_rec(doi, score, rec):
+    def insert_rec(doi, rec, score):
         for i in xrange(doi * settings.recommendations_per_doi, (doi + 1) * settings.recommendations_per_doi):
             if doi2recs[i] == rec:
                 break
@@ -145,20 +158,11 @@ def recommendations(edges, num_dois):
                 doi2recs[i], rec = rec, doi2recs[i]
 
     for round in xrange(0, settings.minhash_rounds):
-        util.log('recommendations', 'beginning minhash round %i' % round)
-        seed = random.getrandbits(64)
-        util.log('recommendations', 'hashing into buckets')
-        buckets = [(minhash(seed, users), doi, users) for doi, users in enumerate(doi2users)]
-        util.log('recommendations', 'sorting buckets')
-        buckets.sort()
-        util.log('recommendations', 'checking scores')
-        for _, bucket in grouped(buckets):
-            bucket = list(bucket)
-            random.shuffle(bucket) # shuffle bucket because it's currently in doi order
-            for (_, doi1, users1), (_, doi2, users2) in itertools.izip(bucket, bucket[1:]):
-                score = jaccard_similarity(users1, users2)
-                insert_rec(doi1, score, doi2)
-                insert_rec(doi2, score, doi1)
+        for doi1, doi2, score in minhash_round(buckets):
+            insert_rec(doi1, doi2, score)
+            insert_rec(doi2, doi1, score)
+
+    del(buckets) # reclaim this memory before we start filling up recs
 
     recs = []
     for doi in xrange(0, num_dois):
@@ -167,15 +171,15 @@ def recommendations(edges, num_dois):
             score = doi2scores[i]
             rec = doi2recs[i]
             if score > 0 and rec >= 0:
-                recs.append([doi, score, rec])
+                recs.append([doi, rec, score])
 
     return recs
 
 @util.timed
 def postprocess(raw_dois, recs):
     """Turn integer DOIs and users back into strings"""
-    recs.sort(key=operator.itemgetter(2))
-    unnumber(recs, raw_dois, column=2)
+    recs.sort(key=operator.itemgetter(1))
+    unnumber(recs, raw_dois, column=1)
     recs.sort(key=operator.itemgetter(0))
     unnumber(recs, raw_dois, column=0)
     return stash(((doi, [(score, rec) for (_, score, rec) in group]) for doi, group in grouped(recs)))
