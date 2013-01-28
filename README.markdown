@@ -6,9 +6,6 @@ Install dependencies
 
 ``` bash
 sudo apt-get install build-essential python python-dev python-pip ipython git-core
-# bson must be installed before pymongo since the pymongo package both depends on bson and overwrites it :(
-sudo pip install bson
-sudo pip install pymongo
 sudo pip install ujson
 ```
 
