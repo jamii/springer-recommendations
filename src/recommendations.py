@@ -57,6 +57,32 @@ class stash():
     def save_as(self, name):
         shutil.copy(self.file.name, os.path.join(settings.data_dir, name))
 
+class priority_queues():
+    """A number of fixed-size priority queues packed together for low memory usage"""
+    def __init__(self, num_queues, max_size):
+        self.num_queues = num_queues
+        self.max_size = max_size
+        self.entries = array('f', itertools.repeat(-1, num_queues * max_size))
+        self.priorities = array('f', itertools.repeat(0.0, num_queues * max_size))
+
+    def insert(self, queue_index, entry, priority):
+        """Insert an entry into the queue at the given index. Requires entry >= 0, priority >= 0.0"""
+        for i in xrange(queue_index * self.max_size, (queue_index + 1) * self.max_size):
+            if self.entries[i] == entry:
+                break
+            elif priority > self.priorities[i]:
+                self.entries[i], entry = entry, self.entries[i]
+                self.priorities[i], priority = priority, self.priorities[i]
+
+    def __iter__(self):
+        for queue_index in xrange(0, self.num_queues):
+            for entry_index in xrange(0, self.max_size):
+                i = (queue_index * self.max_size) + entry_index
+                entry = self.entries[i]
+                priority = self.priorities[i]
+                if entry >= 0 and priority > 0:
+                    yield [queue_index, entry, priority]
+
 def grouped(rows):
     """Group rows by their first column"""
     return itertools.groupby(rows, operator.itemgetter(0))
@@ -145,33 +171,13 @@ def recommendations(edges, num_dois):
     # list of (minhash, random, user, doi)
     buckets = [[0, 0, doi, array('I', sorted(((user for _, user in group))))] for doi, group in grouped(edges)]
 
-    # store top settings.recommmendations_per_doi recs for each doi in two huge arrays, to save on object overhead
-    doi2scores = array('f', itertools.repeat(0.0, num_dois * settings.recommendations_per_doi))
-    doi2recs = array('i', itertools.repeat(-1, num_dois * settings.recommendations_per_doi))
-
-    def insert_rec(doi, rec, score):
-        for i in xrange(doi * settings.recommendations_per_doi, (doi + 1) * settings.recommendations_per_doi):
-            if doi2recs[i] == rec:
-                break
-            elif score > doi2scores[i]:
-                doi2scores[i], score = score, doi2scores[i]
-                doi2recs[i], rec = rec, doi2recs[i]
+    # store a priority queue of recommendations per doi
+    recs = priority_queues(num_queues = num_dois, max_size = settings.recommendations_per_doi)
 
     for round in xrange(0, settings.minhash_rounds):
         for doi1, doi2, score in minhash_round(buckets):
-            insert_rec(doi1, doi2, score)
-            insert_rec(doi2, doi1, score)
-
-    del(buckets) # reclaim this memory before we start filling up recs
-
-    recs = []
-    for doi in xrange(0, num_dois):
-        for rec in xrange(0, settings.recommendations_per_doi):
-            i = (doi*settings.recommendations_per_doi)+rec
-            score = doi2scores[i]
-            rec = doi2recs[i]
-            if score > 0 and rec >= 0:
-                recs.append([doi, rec, score])
+            recs.insert(doi1, doi2, score)
+            recs.insert(doi2, doi1, score)
 
     return recs
 
@@ -189,7 +195,7 @@ def main():
     # raw_edges = itertools.islice(raw_edges, 1000) # for quick testing
     raw_dois, edges = preprocess(raw_edges)
     util.log('main', '%i unique edges' % len(edges))
-    recs = recommendations(edges, len(raw_dois))
+    recs = list(recommendations(edges, len(raw_dois)))
     raw_recs = postprocess(raw_dois, recs)
     sys.stdout.writelines(("%s\n" % ujson.dumps(row) for row in raw_recs))
     sys.stdout.flush()
