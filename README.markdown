@@ -1,4 +1,4 @@
-Generates 'people who read this also read...'-style recommendations based on the [Jaccard similarity](http://en.wikipedia.org/wiki/Jaccard_index) between their readership sets. This code scales to large (1B rows) datasets in limited memory by using external sorting and [locality sensitive hashing](http://en.wikipedia.org/wiki/Locality_sensitive_hashing).
+Generates 'people who read this also read...'-style recommendations based on the [Jaccard similarity](http://en.wikipedia.org/wiki/Jaccard_index) between their readership sets. This code scales to large (1B rows) datasets in limited memory by using external sorting and [locality sensitive hashing](http://en.wikipedia.org/wiki/Locality_sensitive_hashing). Built for [Springer](http://link.springer.com).
 
 # Installation (on Ubuntu 11.04)
 
